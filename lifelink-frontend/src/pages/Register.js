@@ -40,9 +40,31 @@ const Register = () => {
     setLoading(true);
 
     try {
-      await register(formData);
+      // Prepare clean data based on role
+      const submitData = {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role,
+        city: formData.city,
+        contact: formData.contact
+      };
+
+      // Only include role-specific fields
+      if (formData.role === 'donor') {
+        submitData.bloodGroup = formData.bloodGroup;
+        submitData.age = formData.age;
+      }
+
+      if (formData.role === 'hospital') {
+        submitData.hospitalName = formData.hospitalName;
+      }
+
+      console.log('Submitting registration data:', submitData);
+      await register(submitData);
       navigate('/dashboard');
     } catch (error) {
+      console.error('Registration error:', error);
       setError(error.response?.data?.message || 'Registration failed');
     } finally {
       setLoading(false);
