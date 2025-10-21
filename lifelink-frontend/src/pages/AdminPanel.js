@@ -1,3 +1,4 @@
+/*lifelink-frontend/src/pages/AdminPanel.js*/
 import React, { useState, useEffect } from 'react';
 import { adminAPI, inventoryAPI, requestsAPI } from '../services/api';
 

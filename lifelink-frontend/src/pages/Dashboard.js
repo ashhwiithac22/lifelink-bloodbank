@@ -1,3 +1,4 @@
+/*lifelink-frontend/src/pages/Dashboard.js*/
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { donorsAPI, requestsAPI, adminAPI } from '../services/api';

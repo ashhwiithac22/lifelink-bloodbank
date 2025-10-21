@@ -15,40 +15,21 @@ console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
 console.log('PORT:', process.env.PORT);
 console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
 
-// Test route before database connection
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'API is working!' });
-});
-
-// Database connection with validation
+// Database connection
 const connectDB = async () => {
   try {
-    // Validate MONGODB_URI exists
     if (!process.env.MONGODB_URI) {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
-    // Validate connection string format
-    if (!process.env.MONGODB_URI.startsWith('mongodb+srv://') && 
-        !process.env.MONGODB_URI.startsWith('mongodb://')) {
-      throw new Error('Invalid MongoDB connection string format');
-    }
-
     console.log('🔗 Attempting to connect to MongoDB...');
     
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(process.env.MONGODB_URI);
 
     console.log('✅ MongoDB Atlas connection established successfully');
     
   } catch (error) {
-    console.error('❌ MongoDB connection failed:');
-    console.error('Error message:', error.message);
-    console.error('Connection string used:', process.env.MONGODB_URI ? 'Present (hidden for security)' : 'Missing');
-    
-    // Don't exit in development, allow server to run without DB
+    console.error('❌ MongoDB connection failed:', error.message);
     console.log('⚠️  Server running without database connection');
   }
 };
@@ -65,24 +46,66 @@ mongoose.connection.on('error', (err) => {
   console.error('❌ Mongoose connection error:', err.message);
 });
 
-mongoose.connection.on('disconnected', () => {
-  console.log('⚠️  Mongoose disconnected');
+// ✅ IMPORTANT: Import and use routes CORRECTLY
+// Test route first to verify basic routing works
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Test route working!' });
 });
+
+// Now import and use your routes
+try {
+  const authRoutes = require('./routes/auth');
+  app.use('/api/auth', authRoutes);
+  console.log('✅ Auth routes loaded');
+} catch (error) {
+  console.error('❌ Failed to load auth routes:', error.message);
+}
+
+try {
+  const donorRoutes = require('./routes/donors');
+  app.use('/api/donors', donorRoutes);
+  console.log('✅ Donor routes loaded');
+} catch (error) {
+  console.error('❌ Failed to load donor routes:', error.message);
+}
+
+try {
+  const requestRoutes = require('./routes/requests');
+  app.use('/api/requests', requestRoutes);
+  console.log('✅ Request routes loaded');
+} catch (error) {
+  console.error('❌ Failed to load request routes:', error.message);
+}
+
+try {
+  const inventoryRoutes = require('./routes/inventory');
+  app.use('/api/inventory', inventoryRoutes);
+  console.log('✅ Inventory routes loaded');
+} catch (error) {
+  console.error('❌ Failed to load inventory routes:', error.message);
+}
+
+try {
+  const adminRoutes = require('./routes/admin');
+  app.use('/api/admin', adminRoutes);
+  console.log('✅ Admin routes loaded');
+} catch (error) {
+  console.error('❌ Failed to load admin routes:', error.message);
+}
 
 // Basic route
 app.get('/', (req, res) => {
-  const dbStatus = mongoose.connection.readyState;
-  const statusMap = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting'
-  };
-  
   res.json({ 
     message: 'LifeLink Blood Bank API is running!',
-    database: statusMap[dbStatus] || 'unknown',
-    timestamp: new Date().toISOString()
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      '/api/auth',
+      '/api/donors', 
+      '/api/requests',
+      '/api/inventory',
+      '/api/admin'
+    ]
   });
 });
 
@@ -102,5 +125,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📊 Test the API: http://localhost:${PORT}/api/health`);
+  console.log(`📊 API Health: http://localhost:${PORT}/api/health`);
+  console.log(`🔗 API Base: http://localhost:${PORT}/`);
 });
