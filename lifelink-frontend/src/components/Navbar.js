@@ -1,3 +1,4 @@
+/*lifelink-frontend/src/components/Navbar.js*/
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,6 +37,10 @@ const Navbar = () => {
                 <Link to="/admin" className="nav-link">Admin Panel</Link>
               )}
               
+              {user?.role === 'donor' && (
+                <Link to="/donations" className="nav-link">My Donations</Link>
+              )}
+
               <div className="nav-user">
                 <span>Welcome, {user.name}</span>
                 <button onClick={handleLogout} className="logout-btn">

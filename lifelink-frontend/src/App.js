@@ -1,4 +1,3 @@
-//src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -11,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import DonorSearch from './pages/DonorSearch';
 import HospitalRequests from './pages/HospitalRequests';
 import AdminPanel from './pages/AdminPanel';
+import Donations from './pages/Donations'; // ADD THIS IMPORT
 import './App.css';
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -67,6 +67,15 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <AdminPanel />
+                  </ProtectedRoute>
+                } 
+              />
+              {/* ADD DONATIONS ROUTE HERE */}
+              <Route 
+                path="/donations" 
+                element={
+                  <ProtectedRoute allowedRoles={['donor', 'admin', 'hospital']}>
+                    <Donations />
                   </ProtectedRoute>
                 } 
               />

@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const donationRoutes = require('./routes/donations');
 require('dotenv').config();
 
 const app = express();
@@ -8,6 +9,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/api/donations', donationRoutes);
 
 // Debug: Check if environment variables are loaded
 console.log('🔧 Environment check:');

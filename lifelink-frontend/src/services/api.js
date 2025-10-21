@@ -37,12 +37,19 @@ export const requestsAPI = {
 export const inventoryAPI = {
   getAll: () => api.get('/inventory'),
   update: (data) => api.put('/inventory/update', data),
+  adjust: (data) => api.put('/inventory/adjust', data), // ADD THIS
 };
 
 export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getUsers: () => api.get('/admin/users'),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
+};
+
+export const donationsAPI = {
+  create: (donationData) => api.post('/donations', donationData),
+  getAll: (filters = {}) => api.get('/donations', { params: filters }),
+  getStats: () => api.get('/donations/stats'),
 };
 
 export default api;

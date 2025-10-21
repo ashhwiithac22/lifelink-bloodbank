@@ -1,3 +1,4 @@
+//routes/inventory.js
 const express = require('express');
 const Inventory = require('../models/Inventory');
 const User = require('../models/User');
@@ -15,7 +16,8 @@ router.get('/', async (req, res) => {
 });
 
 // Update inventory (Admin only)
-router.put('/update', async (req, res) => {
+// Add manual adjustment endpoint
+router.put('/adjust', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (!token) {
@@ -30,10 +32,19 @@ router.put('/update', async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { bloodGroup, unitsAvailable } = req.body;
+    const { bloodGroup, adjustment, reason } = req.body;
+    
+    // Validate adjustment (can be positive or negative)
+    if (typeof adjustment !== 'number') {
+      return res.status(400).json({ message: 'Adjustment must be a number' });
+    }
+
     const inventory = await Inventory.findOneAndUpdate(
       { bloodGroup },
-      { unitsAvailable },
+      { 
+        $inc: { unitsAvailable: adjustment },
+        $min: { unitsAvailable: 0 } // Prevent negative values
+      },
       { new: true }
     );
 
@@ -41,7 +52,10 @@ router.put('/update', async (req, res) => {
       return res.status(404).json({ message: 'Blood group not found' });
     }
 
-    res.json(inventory);
+    res.json({
+      inventory,
+      message: `Inventory adjusted by ${adjustment} units. Reason: ${reason}`
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

@@ -1477,3 +1477,839 @@ h1 {
     align-self: flex-start;
   }
 }
+/* Enhanced Blood Inventory Styles */
+.inventory-section {
+  margin: 2rem 0;
+}
+
+.inventory-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.inventory-header h3 {
+  font-size: 2rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.inventory-subtitle {
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.blood-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.blood-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  transition: all 0.3s ease;
+}
+
+.blood-card.high::before {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.blood-card.medium::before {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.blood-card.low::before {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.blood-card.critical::before {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+.blood-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.blood-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.blood-group {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.blood-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.blood-card.high .blood-badge {
+  background: rgba(42, 157, 143, 0.1);
+  color: #2a9d8f;
+  border: 1px solid rgba(42, 157, 143, 0.3);
+}
+
+.blood-card.medium .blood-badge {
+  background: rgba(244, 162, 97, 0.1);
+  color: #e76f51;
+  border: 1px solid rgba(244, 162, 97, 0.3);
+}
+
+.blood-card.low .blood-badge {
+  background: rgba(233, 196, 106, 0.1);
+  color: #e9c46a;
+  border: 1px solid rgba(233, 196, 106, 0.3);
+}
+
+.blood-card.critical .blood-badge {
+  background: rgba(230, 57, 70, 0.1);
+  color: #e63946;
+  border: 1px solid rgba(230, 57, 70, 0.3);
+}
+
+.units-available {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.stock-bar {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.stock-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.stock-fill.high {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.stock-fill.medium {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.stock-fill.low {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.stock-fill.critical {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+.stock-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.stock-level {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.blood-card.high .stock-level { color: #2a9d8f; }
+.blood-card.medium .stock-level { color: #e76f51; }
+.blood-card.low .stock-level { color: #e9c46a; }
+.blood-card.critical .stock-level { color: #e63946; }
+
+.stock-percentage {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+/* Inventory Legend */
+.inventory-legend {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.legend-color.high {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.legend-color.medium {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.legend-color.low {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.legend-color.critical {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+/* Inventory Summary */
+.inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #e9ecef;
+}
+
+.summary-icon {
+  font-size: 2rem;
+}
+
+.summary-content h4 {
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.summary-number {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #e63946;
+  margin: 0;
+}
+
+/* Loading and Error States */
+.inventory-loading {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e9ecef;
+  border-top: 4px solid #e63946;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.inventory-error {
+  text-align: center;
+  padding: 2rem;
+  background: #fee;
+  border-radius: 15px;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+/* Inventory Preview for Home */
+.inventory-preview {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  padding: 4rem 0;
+}
+
+.inventory-preview-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+.inventory-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.btn-emergency {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-emergency:hover {
+  background: linear-gradient(135deg, #d62828 0%, #c1121f 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(230, 57, 70, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .inventory-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+  
+  .inventory-legend {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  
+  .inventory-summary {
+    grid-template-columns: 1fr;
+  }
+  
+  .inventory-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .inventory-actions .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+/* Enhanced Blood Inventory Styles */
+.inventory-section {
+  margin: 2rem 0;
+}
+
+.inventory-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.inventory-header h3 {
+  font-size: 2rem;
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.inventory-subtitle {
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.blood-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.blood-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  transition: all 0.3s ease;
+}
+
+.blood-card.high::before {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.blood-card.medium::before {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.blood-card.low::before {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.blood-card.critical::before {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+.blood-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.blood-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.blood-group {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.blood-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.blood-card.high .blood-badge {
+  background: rgba(42, 157, 143, 0.1);
+  color: #2a9d8f;
+  border: 1px solid rgba(42, 157, 143, 0.3);
+}
+
+.blood-card.medium .blood-badge {
+  background: rgba(244, 162, 97, 0.1);
+  color: #e76f51;
+  border: 1px solid rgba(244, 162, 97, 0.3);
+}
+
+.blood-card.low .blood-badge {
+  background: rgba(233, 196, 106, 0.1);
+  color: #e9c46a;
+  border: 1px solid rgba(233, 196, 106, 0.3);
+}
+
+.blood-card.critical .blood-badge {
+  background: rgba(230, 57, 70, 0.1);
+  color: #e63946;
+  border: 1px solid rgba(230, 57, 70, 0.3);
+}
+
+.units-available {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.stock-bar {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.stock-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.5s ease;
+}
+
+.stock-fill.high {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.stock-fill.medium {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.stock-fill.low {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.stock-fill.critical {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+.stock-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+}
+
+.stock-level {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.blood-card.high .stock-level { color: #2a9d8f; }
+.blood-card.medium .stock-level { color: #e76f51; }
+.blood-card.low .stock-level { color: #e9c46a; }
+.blood-card.critical .stock-level { color: #e63946; }
+
+.stock-percentage {
+  color: #6c757d;
+  font-weight: 600;
+}
+
+/* Inventory Legend */
+.inventory-legend {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.legend-color.high {
+  background: linear-gradient(135deg, #2a9d8f 0%, #1a936f 100%);
+}
+
+.legend-color.medium {
+  background: linear-gradient(135deg, #f4a261 0%, #e76f51 100%);
+}
+
+.legend-color.low {
+  background: linear-gradient(135deg, #e9c46a 0%, #f4a261 100%);
+}
+
+.legend-color.critical {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+}
+
+/* Inventory Summary */
+.inventory-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #e9ecef;
+}
+
+.summary-icon {
+  font-size: 2rem;
+}
+
+.summary-content h4 {
+  margin: 0 0 0.5rem 0;
+  color: #2c3e50;
+  font-size: 0.9rem;
+}
+
+.summary-number {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #e63946;
+  margin: 0;
+}
+
+/* Loading and Error States */
+.inventory-loading {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e9ecef;
+  border-top: 4px solid #e63946;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.inventory-error {
+  text-align: center;
+  padding: 2rem;
+  background: #fee;
+  border-radius: 15px;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}
+
+/* Inventory Actions */
+.inventory-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+.btn-emergency {
+  background: linear-gradient(135deg, #e63946 0%, #d62828 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-emergency:hover {
+  background: linear-gradient(135deg, #d62828 0%, #c1121f 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(230, 57, 70, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .inventory-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+  }
+  
+  .inventory-legend {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  
+  .inventory-summary {
+    grid-template-columns: 1fr;
+  }
+  
+  .inventory-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .inventory-actions .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+} 
+/* Donations Page Styles */
+.donations-page {
+  padding: 2rem 0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  min-height: calc(100vh - 160px);
+}
+
+.donation-stats {
+  margin-bottom: 3rem;
+}
+
+.donations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.donation-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  padding: 1.5rem;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+  border: 1px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.donation-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+}
+
+.donation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.donation-details p {
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+}
+
+.donation-details strong {
+  color: #e63946;
+}
+
+/* Donation Form Styles */
+.donation-form {
+  background: white;
+  padding: 2rem;
+  border-radius: 15px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+/* Status Badges */
+.status-badge.completed {
+  background: #d4edda;
+  color: #155724;
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-badge.scheduled {
+  background: #fff3cd;
+  color: #856404;
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-badge.cancelled {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 0.3rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Debug styles */
+.data-source {
+  text-align: center;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border-left: 4px solid #e63946;
+}
+
+.btn-refresh {
+  background: #457b9d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.inventory-empty {
+  text-align: center;
+  padding: 3rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.error-help {
+  font-size: 0.9rem;
+  color: #6c757d;
+  margin: 0.5rem 0;
+}

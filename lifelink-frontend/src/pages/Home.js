@@ -13,23 +13,43 @@ const Home = () => {
     loadHomeStats();
   }, []);
 
-  const loadHomeStats = async () => {
-    try {
-      const inventory = await inventoryAPI.getAll();
-      const totalUnits = inventory.data.reduce((sum, item) => sum + item.unitsAvailable, 0);
-      const criticalStock = inventory.data.filter(item => item.unitsAvailable < 5).length;
+  // In your Home.js, update the loadHomeStats function:
+const loadHomeStats = async () => {
+  try {
+    const response = await inventoryAPI.getAll();
+    console.log('🏠 Home Stats - Real API Data:', response.data);
+    
+    if (response.data && response.data.length > 0) {
+      const totalUnits = response.data.reduce((sum, item) => sum + (item.unitsAvailable || 0), 0);
+      const criticalStock = response.data.filter(item => (item.unitsAvailable || 0) < 5).length;
+      const totalBloodGroups = response.data.length;
+      
+      console.log(`📊 Calculated Stats: ${totalUnits} units, ${criticalStock} critical, ${totalBloodGroups} types`);
       
       setStats({
         totalUnits,
         criticalStock,
-        totalBloodGroups: inventory.data.length
+        totalBloodGroups
       });
-    } catch (error) {
-      console.error('Error loading home stats:', error);
-    } finally {
-      setLoading(false);
+    } else {
+      console.log('❌ No data from inventory API');
+      setStats({
+        totalUnits: 0,
+        criticalStock: 0,
+        totalBloodGroups: 0
+      });
     }
-  };
+  } catch (error) {
+    console.error('❌ Error loading home stats:', error);
+    setStats({
+      totalUnits: 0,
+      criticalStock: 0,
+      totalBloodGroups: 0
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="home-page">
