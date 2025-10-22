@@ -214,30 +214,30 @@ const Dashboard = () => {
                 )}
                 
                 {user?.role === 'hospital' && (
-                  <>
-                    <Link to="/requests" className="action-card">
-                      <div className="action-icon">🆕</div>
-                      <div className="action-content">
-                        <h3>New Request</h3>
-                        <p>Create blood request</p>
-                      </div>
-                    </Link>
-                    <Link to="/donors" className="action-card">
-                      <div className="action-icon">🔍</div>
-                      <div className="action-content">
-                        <h3>Find Donors</h3>
-                        <p>Search available donors</p>
-                      </div>
-                    </Link>
-                    <Link to="/requests" className="action-card">
-                      <div className="action-icon">📋</div>
-                      <div className="action-content">
-                        <h3>My Requests</h3>
-                        <p>View all requests</p>
-                      </div>
-                    </Link>
-                  </>
-                )}
+  <>
+    <Link to="/blood-request" className="action-card">
+      <div className="action-icon">🆕</div>
+      <div className="action-content">
+        <h3>New Request</h3>
+        <p>Send request to donors via email</p>
+      </div>
+    </Link>
+    <Link to="/donors" className="action-card">
+      <div className="action-icon">🔍</div>
+      <div className="action-content">
+        <h3>Find Donors</h3>
+        <p>Search available donors</p>
+      </div>
+    </Link>
+    <Link to="/requests" className="action-card">
+      <div className="action-icon">📋</div>
+      <div className="action-content">
+        <h3>My Requests</h3>
+        <p>View all requests</p>
+      </div>
+    </Link>
+  </>
+)}
                 
                 {user?.role === 'admin' && (
                   <>

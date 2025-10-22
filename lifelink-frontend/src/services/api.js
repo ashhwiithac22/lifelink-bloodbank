@@ -45,7 +45,7 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile'),
 };
 
-// Donors API - COMPLETELY FIXED
+// Donors API
 export const donorsAPI = {
   // Get all donors with optional filters
   getAll: (filters = {}) => {
@@ -72,14 +72,31 @@ export const donorsAPI = {
   getById: (id) => api.get(`/donors/${id}`),
 };
 
-// Requests API
+// Requests API - ENHANCED WITH EMAIL FUNCTIONALITY
 export const requestsAPI = {
+  // Create traditional blood request
   create: (requestData) => api.post('/requests', requestData),
+  
+  // NEW: Send request to specific donor with email
+  sendToDonor: (requestData) => api.post('/requests/send-to-donor', requestData),
+  
+  // Get all requests with filters
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
+  
+  // Get admin requests
   getAdminAll: (filters = {}) => api.get('/requests/admin/all', { params: filters }),
+  
+  // Update request status
   updateStatus: (id, status) => api.put(`/requests/${id}`, { status }),
+  
+  // Get request statistics
   getStats: () => api.get('/requests/stats'),
+  
+  // Search requests
   search: (filters = {}) => api.get('/requests/search', { params: filters }),
+  
+  // NEW: Get hospital's donor requests
+  getHospitalDonorRequests: () => api.get('/requests/hospital/donor-requests'),
 };
 
 // Inventory API

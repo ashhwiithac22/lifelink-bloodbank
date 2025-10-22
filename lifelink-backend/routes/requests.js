@@ -1,86 +1,153 @@
+//backend/routes/requests.js
 const express = require('express');
 const Request = require('../models/Request');
 const Inventory = require('../models/Inventory');
 const User = require('../models/User');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Create blood request (Hospital only)
-router.post('/', async (req, res) => {
+// Create blood request (Hospital only) - ENHANCED WITH DONOR SELECTION
+router.post('/', auth, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'hospital') {
+    // Check if user is hospital
+    if (req.user.role !== 'hospital') {
       return res.status(403).json({ message: 'Only hospitals can create requests' });
     }
 
     const request = await Request.create({
       ...req.body,
-      hospitalId: user._id,
-      hospitalName: user.hospitalName
+      hospitalId: req.user._id,
+      hospitalName: req.user.hospitalName
     });
 
     res.status(201).json(request);
   } catch (error) {
+    console.error('Error creating request:', error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+// NEW: Send blood request to specific donor
+router.post('/send-to-donor', auth, async (req, res) => {
+  try {
+    // Check if user is hospital
+    if (req.user.role !== 'hospital') {
+      return res.status(403).json({ message: 'Only hospitals can send requests to donors' });
+    }
+
+    const { donorId, bloodGroup, unitsRequired, urgency, contactPerson, contactNumber, purpose } = req.body;
+
+    // Validate required fields
+    if (!donorId || !bloodGroup || !unitsRequired || !contactPerson || !contactNumber || !purpose) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Get donor details
+    const donor = await User.findById(donorId);
+    if (!donor || donor.role !== 'donor') {
+      return res.status(404).json({ message: 'Donor not found' });
+    }
+
+    // Check if donor is available
+    if (!donor.availability) {
+      return res.status(400).json({ message: 'This donor is currently not available' });
+    }
+
+    // Create request record
+    const request = await Request.create({
+      hospitalId: req.user._id,
+      hospitalName: req.user.hospitalName,
+      bloodGroup,
+      city: req.user.city,
+      unitsRequired,
+      urgency: urgency || 'medium',
+      contactPerson,
+      contactNumber,
+      purpose,
+      donorRequests: [{
+        donorId: donor._id,
+        donorEmail: donor.email,
+        donorName: donor.name,
+        emailSent: true,
+        emailSentAt: new Date()
+      }],
+      totalEmailsSent: 1
+    });
+
+    // Send email to donor
+    try {
+      const { emailTemplates, sendEmail } = require('../utils/emailService');
+      const emailOptions = emailTemplates.donorBloodRequest(
+        { ...req.body, _id: request._id },
+        donor,
+        { hospitalName: req.user.hospitalName }
+      );
+      
+      const emailResult = await sendEmail(emailOptions);
+      
+      if (emailResult.success) {
+        console.log(`✅ Blood request email sent to donor: ${donor.email}`);
+        
+        // Update request with email status
+        await Request.findByIdAndUpdate(request._id, {
+          'donorRequests.0.emailSent': true,
+          'donorRequests.0.emailSentAt': new Date()
+        });
+      } else {
+        console.log('⚠️ Email sending failed, but request was recorded');
+      }
+    } catch (emailError) {
+      console.error('❌ Email sending error:', emailError);
+      // Continue even if email fails - request is still recorded
+    }
+
+    res.status(201).json({
+      message: 'Blood request sent to donor successfully',
+      request,
+      donor: {
+        name: donor.name,
+        email: donor.email,
+        bloodGroup: donor.bloodGroup
+      }
+    });
+
+  } catch (error) {
+    console.error('Error sending request to donor:', error);
     res.status(400).json({ message: error.message });
   }
 });
 
 // Get all requests (with filtering)
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const { status, hospitalId } = req.query;
+    const { status, bloodGroup } = req.query;
     let filter = {};
 
     if (status) filter.status = status;
-    if (hospitalId) filter.hospitalId = hospitalId;
+    if (bloodGroup) filter.bloodGroup = bloodGroup;
 
     // If user is hospital, only show their requests
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (token) {
-      try {
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id);
-        
-        if (user && user.role === 'hospital') {
-          filter.hospitalId = user._id;
-        }
-      } catch (error) {
-        // Continue without user filter if token is invalid
-      }
+    if (req.user.role === 'hospital') {
+      filter.hospitalId = req.user._id;
     }
 
     const requests = await Request.find(filter)
       .populate('hospitalId', 'hospitalName email contact')
+      .populate('donorRequests.donorId', 'name email bloodGroup contact')
       .sort({ createdAt: -1 });
 
     res.json(requests);
   } catch (error) {
+    console.error('Error fetching requests:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 // Get requests for admin with advanced filtering
-router.get('/admin/all', async (req, res) => {
+router.get('/admin/all', auth, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
 
@@ -93,16 +160,18 @@ router.get('/admin/all', async (req, res) => {
 
     const requests = await Request.find(filter)
       .populate('hospitalId', 'hospitalName email contact')
+      .populate('donorRequests.donorId', 'name email bloodGroup contact')
       .sort({ createdAt: -1 });
 
     res.json(requests);
   } catch (error) {
+    console.error('Error fetching admin requests:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 // Search requests with advanced filters
-router.get('/search', async (req, res) => {
+router.get('/search', auth, async (req, res) => {
   try {
     const { bloodGroup, status, hospitalName, city, dateFrom, dateTo } = req.query;
     let filter = {};
@@ -119,20 +188,35 @@ router.get('/search', async (req, res) => {
       if (dateTo) filter.createdAt.$lte = new Date(dateTo);
     }
 
+    // Hospital users can only see their own requests
+    if (req.user.role === 'hospital') {
+      filter.hospitalId = req.user._id;
+    }
+
     const requests = await Request.find(filter)
       .populate('hospitalId', 'hospitalName email contact')
+      .populate('donorRequests.donorId', 'name email bloodGroup contact')
       .sort({ createdAt: -1 });
 
     res.json(requests);
   } catch (error) {
+    console.error('Error searching requests:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
 // Get request statistics
-router.get('/stats', async (req, res) => {
+router.get('/stats', auth, async (req, res) => {
   try {
+    let matchStage = {};
+
+    // Hospital users can only see their own stats
+    if (req.user.role === 'hospital') {
+      matchStage.hospitalId = req.user._id;
+    }
+
     const stats = await Request.aggregate([
+      { $match: matchStage },
       {
         $group: {
           _id: '$status',
@@ -142,33 +226,29 @@ router.get('/stats', async (req, res) => {
       }
     ]);
 
-    const totalRequests = await Request.countDocuments();
-    const pendingRequests = await Request.countDocuments({ status: 'pending' });
+    const totalRequests = await Request.countDocuments(matchStage);
+    const pendingRequests = await Request.countDocuments({ ...matchStage, status: 'pending' });
+    const emailsSent = await Request.aggregate([
+      { $match: matchStage },
+      { $group: { _id: null, total: { $sum: '$totalEmailsSent' } } }
+    ]);
 
     res.json({
       totalRequests,
       pendingRequests,
+      totalEmailsSent: emailsSent[0]?.total || 0,
       statusBreakdown: stats
     });
   } catch (error) {
+    console.error('Error fetching request stats:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-// Update request status (Admin only) - WITHOUT EMAIL FOR NOW
 // Update request status (Admin only) with email notifications
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'admin') {
+    if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
 
@@ -183,7 +263,7 @@ router.put('/:id', async (req, res) => {
     request.status = status;
     await request.save();
 
-    // ✅ AUTO-DECREASE INVENTORY WHEN REQUEST IS APPROVED
+    // AUTO-DECREASE INVENTORY WHEN REQUEST IS APPROVED
     if (status === 'approved') {
       const inventory = await Inventory.findOneAndUpdate(
         { bloodGroup: request.bloodGroup },
@@ -216,7 +296,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // ✅ Send rejection email
+    // Send rejection email
     if (status === 'rejected' && request.hospitalId && request.hospitalId.email) {
       try {
         const { emailTemplates, sendEmail } = require('../utils/emailService');
@@ -228,7 +308,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // ✅ AUTO-INCREASE INVENTORY IF REQUEST IS REJECTED (return units)
+    // AUTO-INCREASE INVENTORY IF REQUEST IS REJECTED (return units)
     if (status === 'rejected' && oldStatus === 'approved') {
       await Inventory.findOneAndUpdate(
         { bloodGroup: request.bloodGroup },
@@ -241,7 +321,29 @@ router.put('/:id', async (req, res) => {
       message: `Request ${status} successfully`
     });
   } catch (error) {
+    console.error('Error updating request:', error);
     res.status(400).json({ message: error.message });
+  }
+});
+
+// Get donor requests for a specific hospital
+router.get('/hospital/donor-requests', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'hospital') {
+      return res.status(403).json({ message: 'Access denied. Hospital only.' });
+    }
+
+    const requests = await Request.find({ 
+      hospitalId: req.user._id,
+      'donorRequests.0': { $exists: true } // Only requests with donor emails sent
+    })
+    .populate('donorRequests.donorId', 'name email bloodGroup contact availability')
+    .sort({ createdAt: -1 });
+
+    res.json(requests);
+  } catch (error) {
+    console.error('Error fetching hospital donor requests:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 

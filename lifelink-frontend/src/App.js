@@ -1,4 +1,3 @@
-// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -12,10 +11,11 @@ import DonorSearch from './pages/DonorSearch';
 import HospitalRequests from './pages/HospitalRequests';
 import AdminPanel from './pages/AdminPanel';
 import Donations from './pages/Donations';
-import HelpRestock from './pages/HelpRestock'; // ✅ ADD THIS IMPORT
-import './App.css';
+import HelpRestock from './pages/HelpRestock';
 import About from './pages/About';
 import RecordDonation from './pages/RecordDonation';
+import BloodRequest from './pages/BloodRequest'; // ADD THIS IMPORT
+import './App.css';
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -43,7 +43,26 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/about" element={<About />} />
-              <Route path="/record-donation" element={<RecordDonation />} />
+              
+              {/* ADD THIS NEW ROUTE FOR BLOOD REQUEST */}
+              <Route 
+                path="/blood-request" 
+                element={
+                  <ProtectedRoute allowedRoles={['hospital']}>
+                    <BloodRequest />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              <Route 
+                path="/record-donation" 
+                element={
+                  <ProtectedRoute allowedRoles={['donor']}>
+                    <RecordDonation />
+                  </ProtectedRoute>
+                } 
+              />
+              
               <Route 
                 path="/dashboard" 
                 element={
@@ -84,7 +103,6 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              {/* ✅ ADD HELP RESTOCK ROUTE */}
               <Route 
                 path="/help-restock" 
                 element={
