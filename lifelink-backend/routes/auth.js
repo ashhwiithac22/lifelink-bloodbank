@@ -1,3 +1,4 @@
+//routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -14,11 +15,12 @@ const generateToken = (id) => {
 };
 
 // Register user
+// routes/auth.js - Update the register route
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role, bloodGroup, age, city, contact, hospitalName } = req.body;
 
-    console.log('Registration attempt for:', email);
+    console.log('Registration attempt for:', email, 'Role:', role);
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -26,23 +28,37 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Validate role-specific requirements
+    if (role === 'donor') {
+      if (!bloodGroup || !age) {
+        return res.status(400).json({ message: 'Blood group and age are required for donors' });
+      }
+    }
+
+    if (role === 'hospital') {
+      if (!hospitalName) {
+        return res.status(400).json({ message: 'Hospital name is required for hospitals' });
+      }
+    }
+
+    // For admin role, no additional fields are required
+    // You can add admin-specific validation here if needed
+
     // Create user
     const user = await User.create({
       name,
       email,
       password,
       role,
-      bloodGroup,
-      age,
+      bloodGroup: role === 'donor' ? bloodGroup : undefined,
+      age: role === 'donor' ? age : undefined,
       city,
       contact,
-      hospitalName
+      hospitalName: role === 'hospital' ? hospitalName : undefined,
+      availability: role === 'donor' // Default availability for donors
     });
 
-    // Initialize inventory if not exists
-    if (role === 'admin') {
-      await Inventory.initializeInventory();
-    }
+    console.log('User created successfully:', user.email, 'Role:', user.role);
 
     if (user) {
       res.status(201).json({
@@ -52,6 +68,8 @@ router.post('/register', async (req, res) => {
         role: user.role,
         bloodGroup: user.bloodGroup,
         city: user.city,
+        hospitalName: user.hospitalName,
+        availability: user.availability,
         token: generateToken(user._id),
       });
     }

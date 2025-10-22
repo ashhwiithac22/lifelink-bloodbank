@@ -1,3 +1,4 @@
+//src/pages/Register.js
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -12,7 +13,8 @@ const Register = () => {
     age: '',
     city: '',
     contact: '',
-    hospitalName: ''
+    hospitalName: '',
+    adminCode: '' // New field for admin registration
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,6 +36,13 @@ const Register = () => {
     try {
       console.log('Registration data:', formData);
       
+      // Validate admin registration
+      if (formData.role === 'admin') {
+        if (formData.adminCode !== 'ADMIN2024') { // You can change this secret code
+          throw new Error('Invalid admin registration code');
+        }
+      }
+      
       // Validate required fields based on role
       if (formData.role === 'donor' && (!formData.bloodGroup || !formData.age)) {
         throw new Error('Blood group and age are required for donors');
@@ -43,7 +52,10 @@ const Register = () => {
         throw new Error('Hospital name is required for hospitals');
       }
 
-      await register(formData);
+      // Remove adminCode from data sent to backend (it's only for frontend validation)
+      const { adminCode, ...registrationData } = formData;
+      
+      await register(registrationData);
       navigate('/dashboard');
     } catch (error) {
       console.error('Registration error details:', error);
@@ -80,6 +92,7 @@ const Register = () => {
               value={formData.name}
               onChange={handleChange}
               required
+              placeholder="Enter your full name"
             />
           </div>
 
@@ -91,6 +104,7 @@ const Register = () => {
               value={formData.email}
               onChange={handleChange}
               required
+              placeholder="Enter your email address"
             />
           </div>
 
@@ -103,6 +117,7 @@ const Register = () => {
               onChange={handleChange}
               required
               minLength="6"
+              placeholder="Enter a strong password (min 6 characters)"
             />
           </div>
 
@@ -111,8 +126,27 @@ const Register = () => {
             <select name="role" value={formData.role} onChange={handleChange} required>
               <option value="donor">Blood Donor</option>
               <option value="hospital">Hospital</option>
+              <option value="admin">Administrator</option>
             </select>
           </div>
+
+          {/* Admin-specific fields */}
+          {formData.role === 'admin' && (
+            <div className="form-group">
+              <label>Admin Registration Code *</label>
+              <input
+                type="password"
+                name="adminCode"
+                value={formData.adminCode}
+                onChange={handleChange}
+                required
+                placeholder="Enter admin registration code"
+              />
+              <small style={{color: '#6c757d', fontSize: '0.8rem'}}>
+                Contact system administrator to get the registration code
+              </small>
+            </div>
+          )}
 
           {/* Donor-specific fields */}
           {formData.role === 'donor' && (
@@ -147,6 +181,7 @@ const Register = () => {
                   required
                   min="18"
                   max="65"
+                  placeholder="Enter your age (18-65)"
                 />
               </div>
             </>
@@ -162,6 +197,7 @@ const Register = () => {
                 value={formData.hospitalName}
                 onChange={handleChange}
                 required
+                placeholder="Enter hospital name"
               />
             </div>
           )}
@@ -175,6 +211,7 @@ const Register = () => {
               value={formData.city}
               onChange={handleChange}
               required
+              placeholder="Enter your city"
             />
           </div>
 
@@ -186,6 +223,7 @@ const Register = () => {
               value={formData.contact}
               onChange={handleChange}
               required
+              placeholder="Enter contact number"
             />
           </div>
 
@@ -198,9 +236,14 @@ const Register = () => {
           <p>Already have an account? <a href="/login">Login here</a></p>
         </div>
 
-        {/* Debug info */}
-        <div style={{ marginTop: '1rem', padding: '1rem', background: '#f8f9fa', borderRadius: '5px', fontSize: '12px' }}>
-          <strong>Debug Info:</strong> Make sure all required fields are filled. Donors need blood group and age.
+        {/* Registration Info */}
+        <div className="registration-info">
+          <h4>Registration Types:</h4>
+          <ul>
+            <li><strong>Blood Donor:</strong> Can donate blood and view donation history</li>
+            <li><strong>Hospital:</strong> Can request blood and search for donors</li>
+            <li><strong>Administrator:</strong> Full system access and management</li>
+          </ul>
         </div>
       </div>
     </div>
