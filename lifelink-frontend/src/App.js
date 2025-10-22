@@ -15,6 +15,7 @@ import Donations from './pages/Donations';
 import HelpRestock from './pages/HelpRestock'; // ✅ ADD THIS IMPORT
 import './App.css';
 import About from './pages/About';
+import RecordDonation from './pages/RecordDonation';
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -42,6 +43,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/about" element={<About />} />
+              <Route path="/record-donation" element={<RecordDonation />} />
               <Route 
                 path="/dashboard" 
                 element={

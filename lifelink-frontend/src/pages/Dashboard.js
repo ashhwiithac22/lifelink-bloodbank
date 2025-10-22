@@ -1,12 +1,13 @@
-/*lifelink-frontend/src/pages/Dashboard.js*/
+/* lifelink-frontend/src/pages/Dashboard.js */
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { donorsAPI, requestsAPI, adminAPI, inventoryAPI, donationsAPI } from '../services/api';
 import BloodInventory from '../components/BloodInventory';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({});
   const [recentRequests, setRecentRequests] = useState([]);
   const [recentDonors, setRecentDonors] = useState([]);
@@ -52,20 +53,30 @@ const Dashboard = () => {
         setRecentDonors(donorsResponse.data.slice(0, 4));
         calculateInventoryStats(inventoryResponse.data);
       } else if (user?.role === 'donor') {
+        // FIXED: Use getAll donations and they'll be filtered by backend based on token
         const [inventoryResponse, donationsResponse] = await Promise.all([
           inventoryAPI.getAll(),
-          donationsAPI.getAll()
+          donationsAPI.getAll() // CHANGED: Removed getByDonor, using getAll instead
         ]);
         
+        const donorDonations = donationsResponse.data || [];
         setStats({ 
-          totalDonations: donationsResponse.data.length,
-          totalUnits: donationsResponse.data.reduce((sum, donation) => sum + donation.unitsDonated, 0)
+          totalDonations: donorDonations.length,
+          totalUnits: donorDonations.reduce((sum, donation) => sum + (donation.unitsDonated || 1), 0)
         });
-        setRecentDonations(donationsResponse.data.slice(0, 4));
+        setRecentDonations(donorDonations.slice(0, 4));
         calculateInventoryStats(inventoryResponse.data);
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      // Set default empty states for donor if donations API fails
+      if (user?.role === 'donor') {
+        setStats({ 
+          totalDonations: 0,
+          totalUnits: 0
+        });
+        setRecentDonations([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,6 +102,12 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error updating availability:', error);
     }
+  };
+
+  // FIXED: Handle Record Donation click
+  const handleRecordDonation = () => {
+    // REMOVED the user check since ProtectedRoute ensures user is logged in
+    navigate('/record-donation');
   };
 
   const getStatusBadge = (status) => {
@@ -161,13 +178,15 @@ const Dashboard = () => {
               <div className="actions-grid">
                 {user?.role === 'donor' && (
                   <>
-                    <Link to="/help-restock" className="action-card">
+                    {/* FIXED: Record Donation button */}
+                    <div className="action-card" onClick={handleRecordDonation}>
                       <div className="action-icon">🩸</div>
                       <div className="action-content">
                         <h3>Record Donation</h3>
-                        <p>Help restock blood inventory</p>
+                        <p>Add a new blood donation</p>
                       </div>
-                    </Link>
+                    </div>
+                    
                     <div className="action-card" onClick={handleAvailabilityToggle}>
                       <div className="action-icon">📱</div>
                       <div className="action-content">
@@ -175,11 +194,20 @@ const Dashboard = () => {
                         <p>Mark as {availability ? 'unavailable' : 'available'}</p>
                       </div>
                     </div>
+                    
                     <Link to="/donations" className="action-card">
                       <div className="action-icon">📊</div>
                       <div className="action-content">
                         <h3>My Donations</h3>
                         <p>View donation history</p>
+                      </div>
+                    </Link>
+                    
+                    <Link to="/help-restock" className="action-card">
+                      <div className="action-icon">💪</div>
+                      <div className="action-content">
+                        <h3>Help Restock</h3>
+                        <p>Find urgent needs</p>
                       </div>
                     </Link>
                   </>
@@ -350,6 +378,23 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
+
+            {/* Empty State for Donors with No Donations */}
+            {user?.role === 'donor' && stats.totalDonations === 0 && (
+              <div className="empty-state-card">
+                <div className="empty-icon">🩸</div>
+                <div className="empty-content">
+                  <h3>No Donations Yet</h3>
+                  <p>Start your life-saving journey by recording your first blood donation.</p>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={handleRecordDonation}
+                  >
+                    Record First Donation
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column - Activity & Inventory */}
