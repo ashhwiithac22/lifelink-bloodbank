@@ -1,4 +1,3 @@
-/*lifelink-frontend/src/contexts/AuthContext.js*/
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { authAPI } from '../services/api';
 
@@ -15,52 +14,87 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      authAPI.getMe()
-        .then(response => {
+    const initializeAuth = async () => {
+      const storedToken = localStorage.getItem('token');
+      
+      if (storedToken) {
+        try {
+          // Try to get user profile with the token
+          const response = await authAPI.getMe();
           setUser(response.data);
-        })
-        .catch(() => {
+          setToken(storedToken);
+        } catch (error) {
+          console.error('Token validation failed:', error);
+          // Token is invalid, clear it
           localStorage.removeItem('token');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
+          setToken(null);
+        }
+      }
+      
       setLoading(false);
-    }
+    };
+
+    initializeAuth();
   }, []);
 
   const login = async (credentials) => {
-    const response = await authAPI.login(credentials);
-    const { token, ...userData } = response.data;
-    localStorage.setItem('token', token);
-    setUser(userData);
-    return userData;
+    try {
+      const response = await authAPI.login(credentials);
+      const { token: newToken, ...userData } = response.data;
+      
+      // Store token and user data
+      localStorage.setItem('token', newToken);
+      setToken(newToken);
+      setUser(userData);
+      
+      return userData;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   };
 
   const register = async (userData) => {
-    const response = await authAPI.register(userData);
-    const { token, ...user } = response.data;
-    localStorage.setItem('token', token);
-    setUser(user);
-    return user;
+    try {
+      const response = await authAPI.register(userData);
+      const { token: newToken, ...user } = response.data;
+      
+      // Store token and user data
+      localStorage.removeItem('token', newToken);
+      setToken(newToken);
+      setUser(user);
+      
+      return user;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    setToken(null);
     setUser(null);
+  };
+
+  const updateUser = (updatedUserData) => {
+    setUser(prevUser => ({
+      ...prevUser,
+      ...updatedUserData
+    }));
   };
 
   const value = {
     user,
+    token,
     login,
     register,
     logout,
-    loading
+    loading,
+    updateUser
   };
 
   return (

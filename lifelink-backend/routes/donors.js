@@ -1,44 +1,77 @@
-//routes/donors.js
 const express = require('express');
 const User = require('../models/User');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all donors (with filtering)
-// Get all donors (with advanced filtering)
-router.get('/', async (req, res) => {
+// Get all donors (with filtering) - FIXED VERSION
+router.get('/', auth, async (req, res) => {
   try {
+    // Check if user has permission to view donors
+    if (req.user.role !== 'hospital' && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: 'Access denied. Only hospitals and admins can view donors.' 
+      });
+    }
+
     const { bloodGroup, city, availability, search } = req.query;
+    
+    // Build filter object
     let filter = { role: 'donor' };
 
-    if (bloodGroup) filter.bloodGroup = bloodGroup;
-    if (city) filter.city = new RegExp(city, 'i');
-    if (availability !== undefined) filter.availability = availability === 'true';
+    // Add filters if provided
+    if (bloodGroup && bloodGroup !== '') {
+      filter.bloodGroup = bloodGroup;
+    }
+    
+    if (city && city !== '') {
+      filter.city = new RegExp(city, 'i'); // Case-insensitive search
+    }
+    
+    if (availability !== undefined && availability !== '') {
+      filter.availability = availability === 'true';
+    }
     
     // Text search across multiple fields
-    if (search) {
+    if (search && search !== '') {
       filter.$or = [
         { name: new RegExp(search, 'i') },
         { city: new RegExp(search, 'i') },
-        { bloodGroup: new RegExp(search, 'i') }
+        { bloodGroup: new RegExp(search, 'i') },
+        { contact: new RegExp(search, 'i') }
       ];
     }
 
+    console.log('Donor search filter:', filter);
+
+    // Fetch donors with selected fields only
     const donors = await User.find(filter)
-      .select('-password')
+      .select('name email bloodGroup age city contact availability createdAt updatedAt')
       .sort({ availability: -1, createdAt: -1 });
+
+    console.log(`Found ${donors.length} donors`);
 
     res.json(donors);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching donors:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch donors',
+      error: error.message 
+    });
   }
 });
 
-// Get donor statistics
-router.get('/stats', async (req, res) => {
+// Get donor statistics - FIXED VERSION
+router.get('/stats', auth, async (req, res) => {
   try {
     const totalDonors = await User.countDocuments({ role: 'donor' });
-    const availableDonors = await User.countDocuments({ role: 'donor', availability: true });
+    const availableDonors = await User.countDocuments({ 
+      role: 'donor', 
+      availability: true 
+    });
+    
+    // Get unique cities count
+    const uniqueCities = await User.distinct('city', { role: 'donor' });
     
     const donorsByBloodGroup = await User.aggregate([
       { $match: { role: 'donor' } },
@@ -50,7 +83,8 @@ router.get('/stats', async (req, res) => {
             $sum: { $cond: [{ $eq: ['$availability', true] }, 1, 0] }
           }
         }
-      }
+      },
+      { $sort: { _id: 1 } }
     ]);
 
     const donorsByCity = await User.aggregate([
@@ -58,7 +92,10 @@ router.get('/stats', async (req, res) => {
       {
         $group: {
           _id: '$city',
-          count: { $sum: 1 }
+          count: { $sum: 1 },
+          available: {
+            $sum: { $cond: [{ $eq: ['$availability', true] }, 1, 0] }
+          }
         }
       },
       { $sort: { count: -1 } },
@@ -68,64 +105,108 @@ router.get('/stats', async (req, res) => {
     res.json({
       totalDonors,
       availableDonors,
+      citiesCovered: uniqueCities.length,
       donorsByBloodGroup,
       donorsByCity
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching donor stats:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch donor statistics',
+      error: error.message 
+    });
   }
 });
 
-// Update donor availability
-router.put('/availability', async (req, res) => {
+// Update donor availability - FIXED VERSION
+router.put('/availability', auth, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
-    }
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'donor') {
-      return res.status(403).json({ message: 'Access denied' });
+    // Only donors can update their own availability
+    if (req.user.role !== 'donor') {
+      return res.status(403).json({ 
+        message: 'Access denied. Only donors can update availability.' 
+      });
     }
 
     const { availability } = req.body;
+    
+    if (typeof availability !== 'boolean') {
+      return res.status(400).json({ 
+        message: 'Availability must be a boolean value' 
+      });
+    }
+
     const donor = await User.findByIdAndUpdate(
-      user._id,
+      req.user._id,
       { availability },
       { new: true }
     ).select('-password');
 
+    res.json({
+      message: `Availability updated to ${availability ? 'Available' : 'Not Available'}`,
+      donor
+    });
+  } catch (error) {
+    console.error('Error updating availability:', error);
+    res.status(400).json({ 
+      message: 'Failed to update availability',
+      error: error.message 
+    });
+  }
+});
+
+// Get donor profile - FIXED VERSION
+router.get('/profile', auth, async (req, res) => {
+  try {
+    // Only donors can access their own profile
+    if (req.user.role !== 'donor') {
+      return res.status(403).json({ 
+        message: 'Access denied. Donor profile access only.' 
+      });
+    }
+
+    const donor = await User.findById(req.user._id)
+      .select('-password');
+
     res.json(donor);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error fetching donor profile:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch donor profile',
+      error: error.message 
+    });
   }
 });
 
-// Get donor profile
-router.get('/profile', async (req, res) => {
+// Get single donor by ID (for hospitals/admins)
+router.get('/:id', auth, async (req, res) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
+    // Check if user has permission to view donor details
+    if (req.user.role !== 'hospital' && req.user.role !== 'admin') {
+      return res.status(403).json({ 
+        message: 'Access denied. Only hospitals and admins can view donor details.' 
+      });
     }
 
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'donor') {
-      return res.status(403).json({ message: 'Access denied' });
+    const donor = await User.findOne({ 
+      _id: req.params.id, 
+      role: 'donor' 
+    }).select('-password');
+
+    if (!donor) {
+      return res.status(404).json({ 
+        message: 'Donor not found' 
+      });
     }
 
-    res.json(user);
+    res.json(donor);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching donor:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch donor',
+      error: error.message 
+    });
   }
 });
 
-// ✅ MUST HAVE THIS LINE:
 module.exports = router;
