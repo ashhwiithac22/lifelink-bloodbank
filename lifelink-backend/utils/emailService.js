@@ -1,8 +1,8 @@
 const nodemailer = require('nodemailer');
 
-// Create transporter
+// Create transporter with correct syntax
 const createTransporter = () => {
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER,
@@ -11,117 +11,129 @@ const createTransporter = () => {
   });
 };
 
-// Email templates
+// Enhanced email templates with better error handling
 const emailTemplates = {
-  // Donor Blood Request Email
-  donorBloodRequest: (request, donor, hospital) => ({
-    from: process.env.EMAIL_USER || 'noreply@lifelink.com',
+  // Donor Blood Request Email - ENHANCED
+  donorBloodRequest: (request, donor, hospital, hospitalContact) => ({
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: donor.email,
     subject: `🩸 Urgent Blood Request from ${hospital.hospitalName}`,
     html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px;">
-        <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <div style="text-align: center; margin-bottom: 30px;">
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px; }
+          .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #dc3545; padding-bottom: 20px; }
+          .urgent-alert { background: #fff5f5; padding: 20px; border-radius: 8px; border-left: 4px solid #dc3545; margin-bottom: 25px; }
+          .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+          .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
+          .cta-section { background: #e7f3ff; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; }
+          .footer { text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+          .contact-highlight { background: #fff3cd; padding: 15px; border-radius: 6px; margin: 15px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
             <h1 style="color: #dc3545; margin: 0;">LifeLink Blood Bank</h1>
             <p style="color: #666; margin: 5px 0 0 0;">Saving Lives Together</p>
           </div>
 
-          <!-- Main Content -->
-          <div style="background: #fff5f5; padding: 20px; border-radius: 8px; border-left: 4px solid #dc3545; margin-bottom: 25px;">
+          <div class="urgent-alert">
             <h2 style="color: #dc3545; margin: 0 0 15px 0;">Urgent Blood Request</h2>
             <p style="margin: 0; color: #333; font-size: 16px;">
               Dear <strong>${donor.name}</strong>,
             </p>
             <p style="margin: 15px 0; color: #333;">
-              <strong>${hospital.hospitalName}</strong> has requested your help for a <strong>${request.bloodGroup}</strong> blood donation.
+              <strong>${hospital.hospitalName}</strong> urgently needs <strong>${request.bloodGroup}</strong> blood donation.
             </p>
           </div>
 
-          <!-- Request Details -->
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
-            <h3 style="color: #333; margin: 0 0 15px 0;">📋 Request Details</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px 0; color: #666; width: 40%;"><strong>Hospital:</strong></td>
-                <td style="padding: 8px 0; color: #333;">${hospital.hospitalName}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Blood Group Needed:</strong></td>
-                <td style="padding: 8px 0; color: #333;">
-                  <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;">
-                    ${request.bloodGroup}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Units Required:</strong></td>
-                <td style="padding: 8px 0; color: #333;">${request.unitsRequired} unit(s)</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Urgency Level:</strong></td>
-                <td style="padding: 8px 0; color: #333;">
-                  <span style="color: ${
-                    request.urgency === 'high' ? '#dc3545' : 
-                    request.urgency === 'medium' ? '#ffc107' : '#28a745'
-                  }; font-weight: bold; text-transform: capitalize;">
-                    ${request.urgency}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Contact Person:</strong></td>
-                <td style="padding: 8px 0; color: #333;">${request.contactPerson}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Contact Number:</strong></td>
-                <td style="padding: 8px 0; color: #333;">
-                  <a href="tel:${request.contactNumber}" style="color: #007bff; text-decoration: none;">
-                    ${request.contactNumber}
-                  </a>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Purpose:</strong></td>
-                <td style="padding: 8px 0; color: #333;">${request.purpose}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666;"><strong>Request Date:</strong></td>
-                <td style="padding: 8px 0; color: #333;">${new Date().toLocaleDateString()}</td>
-              </tr>
-            </table>
+          <div class="contact-highlight">
+            <h3 style="margin: 0 0 10px 0; color: #856404;">📞 Immediate Contact Information</h3>
+            <p style="margin: 5px 0; font-size: 16px;">
+              <strong>Hospital:</strong> ${hospital.hospitalName}<br>
+              <strong>Contact Person:</strong> ${request.contactPerson}<br>
+              <strong>Phone:</strong> <a href="tel:${request.contactNumber}" style="color: #007bff; text-decoration: none; font-weight: bold;">${request.contactNumber}</a><br>
+              <strong>Your Contact:</strong> ${donor.contact} | ${donor.email}
+            </p>
           </div>
 
-          <!-- Call to Action -->
-          <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 25px;">
+          <h3 style="color: #333; margin: 0 0 15px 0;">📋 Request Details</h3>
+          <table class="details-table">
+            <tr>
+              <td style="color: #666; width: 40%;"><strong>Blood Group Needed:</strong></td>
+              <td style="color: #333;">
+                <span style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold;">
+                  ${request.bloodGroup}
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="color: #666;"><strong>Units Required:</strong></td>
+              <td style="color: #333;">${request.unitsRequired} unit(s)</td>
+            </tr>
+            <tr>
+              <td style="color: #666;"><strong>Urgency Level:</strong></td>
+              <td style="color: #333;">
+                <span style="color: ${
+                  request.urgency === 'high' ? '#dc3545' : 
+                  request.urgency === 'medium' ? '#ff9800' : '#4caf50'
+                }; font-weight: bold; text-transform: capitalize;">
+                  ${request.urgency} priority
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <td style="color: #666;"><strong>Purpose:</strong></td>
+              <td style="color: #333;">${request.purpose}</td>
+            </tr>
+            <tr>
+              <td style="color: #666;"><strong>Request Date:</strong></td>
+              <td style="color: #333;">${new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
+            </tr>
+          </table>
+
+          <div class="cta-section">
             <h3 style="color: #0056b3; margin: 0 0 15px 0;">💪 You Can Save Lives!</h3>
-            <p style="margin: 0 0 20px 0; color: #333;">
-              Please reach out to the hospital if you're available to help. Your donation can save up to 3 lives!
+            <p style="margin: 0 0 20px 0; color: #333; font-size: 16px;">
+              Your ${donor.bloodGroup} blood is urgently needed. Please contact the hospital immediately if you can help.
             </p>
-            <div style="display: inline-block; background: #dc3545; padding: 12px 24px; border-radius: 6px;">
-              <a href="tel:${request.contactNumber}" style="color: white; text-decoration: none; font-weight: bold; font-size: 16px;">
-                📞 Contact Hospital Now
+            <div style="margin: 20px 0;">
+              <a href="tel:${request.contactNumber}" style="display: inline-block; background: #dc3545; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin: 5px;">
+                📞 Call Hospital Now
+              </a>
+              <a href="mailto:${hospitalContact}" style="display: inline-block; background: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin: 5px;">
+                📧 Email Response
               </a>
             </div>
+            <p style="margin: 15px 0 0 0; color: #666; font-size: 14px;">
+              ⚠️ Each donation can save up to 3 lives!
+            </p>
           </div>
 
-          <!-- Footer -->
-          <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666;">
+          <div class="footer">
             <p style="margin: 0 0 10px 0;">
               <strong>LifeLink Blood Bank</strong><br>
-              Emergency Helpline: 📞 0422-3566580
+              Emergency Helpline: 📞 <strong>0422-3566580</strong><br>
+              Email: support@lifelink.com
             </p>
-            <p style="margin: 0; font-size: 12px;">
-              This is an automated message. Please do not reply to this email.
+            <p style="margin: 0; font-size: 11px; color: #999;">
+              This is an automated message. Please do not reply directly to this email.<br>
+              Contact the hospital directly using the phone number provided above.
             </p>
           </div>
         </div>
-      </div>
+      </body>
+      </html>
     `
   }),
 
   requestApproved: (request, hospitalEmail) => ({
-    from: process.env.EMAIL_USER || 'noreply@lifelink.com',
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: hospitalEmail,
     subject: `✅ Blood Request Approved - ${request.bloodGroup}`,
     html: `
@@ -148,7 +160,7 @@ const emailTemplates = {
   }),
 
   requestRejected: (request, hospitalEmail) => ({
-    from: process.env.EMAIL_USER || 'noreply@lifelink.com',
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: hospitalEmail,
     subject: `❌ Blood Request Update - ${request.bloodGroup}`,
     html: `
@@ -176,22 +188,83 @@ const emailTemplates = {
   })
 };
 
-// Send email function
+// Enhanced send email function with better error handling
 const sendEmail = async (emailOptions) => {
   try {
+    // Check if email credentials are configured
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.log('📧 Email credentials not configured. Skipping email send.');
-      return { success: true, message: 'Email skipped - not configured' };
+      return { 
+        success: false, 
+        error: 'Email credentials not configured',
+        skipped: true 
+      };
     }
 
+    console.log(`📧 Attempting to send email to: ${emailOptions.to}`);
+    console.log(`📧 Email subject: ${emailOptions.subject}`);
+
     const transporter = createTransporter();
+    
+    // Send email
     const info = await transporter.sendMail(emailOptions);
-    console.log('✅ Email sent successfully to:', emailOptions.to);
-    return { success: true, messageId: info.messageId };
+    
+    console.log('✅ Email sent successfully!');
+    console.log(`✅ Message ID: ${info.messageId}`);
+    console.log(`✅ To: ${emailOptions.to}`);
+    
+    return { 
+      success: true, 
+      messageId: info.messageId,
+      response: info.response 
+    };
+    
   } catch (error) {
     console.error('❌ Email sending failed:', error);
-    return { success: false, error: error.message };
+    
+    // Provide more specific error messages
+    let errorMessage = 'Email sending failed';
+    
+    if (error.code === 'EAUTH') {
+      errorMessage = 'Email authentication failed. Check your email credentials.';
+    } else if (error.code === 'EENVELOPE') {
+      errorMessage = 'Invalid email address or envelope configuration.';
+    } else if (error.code === 'ECONNECTION') {
+      errorMessage = 'Could not connect to email server. Check your internet connection.';
+    } else {
+      errorMessage = error.message;
+    }
+    
+    return { 
+      success: false, 
+      error: errorMessage,
+      details: error 
+    };
   }
 };
 
-module.exports = { emailTemplates, sendEmail };
+// Test email configuration
+const testEmailConfig = async () => {
+  console.log('🧪 Testing email configuration...');
+  
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log('❌ Email credentials not found in environment variables');
+    return false;
+  }
+  
+  try {
+    const transporter = createTransporter();
+    await transporter.verify();
+    console.log('✅ Email configuration test passed');
+    return true;
+  } catch (error) {
+    console.error('❌ Email configuration test failed:', error.message);
+    return false;
+  }
+};
+
+module.exports = { 
+  emailTemplates, 
+  sendEmail, 
+  testEmailConfig
+};
