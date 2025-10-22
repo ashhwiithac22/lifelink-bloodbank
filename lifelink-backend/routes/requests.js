@@ -1,12 +1,33 @@
 const express = require('express');
 const Request = require('../models/Request');
-const Inventory = require('../models/Inventory');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
-// NEW: Send blood request to specific donor - ENHANCED WITH BETTER EMAIL HANDLING
+// NEW: Check for duplicate requests before sending
+// Add this function at the top of your requests.js file
+const checkDuplicateRequest = async (hospitalId, donorId, bloodGroup) => {
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    const existingRequest = await Request.findOne({
+      hospitalId: hospitalId,
+      'donorRequests.donorId': donorId,
+      bloodGroup: bloodGroup,
+      createdAt: { $gte: twentyFourHoursAgo },
+      status: 'pending'
+    });
+
+    return existingRequest;
+  } catch (error) {
+    console.error('Error checking duplicate request:', error);
+    return null;
+  }
+};
+
+
+// NEW: Send blood request to specific donor with DUPLICATE PREVENTION
 router.post('/send-to-donor', auth, async (req, res) => {
   try {
     // Check if user is hospital
@@ -30,6 +51,20 @@ router.post('/send-to-donor', auth, async (req, res) => {
     // Check if donor is available
     if (!donor.availability) {
       return res.status(400).json({ message: 'This donor is currently not available' });
+    }
+
+    // NEW: Check for duplicate request within 24 hours
+    const duplicateRequest = await checkDuplicateRequest(req.user._id, donorId, bloodGroup);
+    if (duplicateRequest) {
+      return res.status(409).json({ 
+        message: `You already sent a ${bloodGroup} blood request to ${donor.name} in the last 24 hours.`,
+        duplicate: true,
+        existingRequest: {
+          id: duplicateRequest._id,
+          createdAt: duplicateRequest.createdAt,
+          status: duplicateRequest.status
+        }
+      });
     }
 
     console.log(`📧 Preparing to send request to donor: ${donor.name} (${donor.email})`);
@@ -135,6 +170,27 @@ router.post('/send-to-donor', auth, async (req, res) => {
       responseData.message = `Blood request recorded for ${donor.name}. Email sending failed: ${emailResult.error}`;
     }
 
+    // NEW: Emit real-time update via Socket.io
+    try {
+      const io = req.app.get('socketio');
+      if (io) {
+        io.emit('newEmailRequest', {
+          requestId: request._id,
+          hospitalId: req.user._id,
+          hospitalName: req.user.hospitalName,
+          bloodGroup: bloodGroup,
+          donorName: donor.name,
+          unitsRequired: unitsRequired,
+          urgency: urgency,
+          createdAt: request.createdAt,
+          status: request.status
+        });
+        console.log('📢 Real-time update emitted for new email request');
+      }
+    } catch (socketError) {
+      console.log('Socket.io not available for real-time updates');
+    }
+
     res.status(201).json(responseData);
 
   } catch (error) {
@@ -146,7 +202,80 @@ router.post('/send-to-donor', auth, async (req, res) => {
   }
 });
 
-// Get all requests (with filtering) - ENHANCED WITH CONTACT INFO
+// NEW: Get unique email requests for hospital (no duplicates)
+router.get('/hospital/unique-email-requests', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'hospital') {
+      return res.status(403).json({ message: 'Access denied. Hospital only.' });
+    }
+
+    const requests = await Request.find({ 
+      hospitalId: req.user._id,
+      'donorRequests.0': { $exists: true }
+    })
+    .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
+    .sort({ createdAt: -1 });
+
+    // NEW: Filter out duplicates - keep only the latest request for each donor+bloodGroup combination
+    const uniqueRequestsMap = new Map();
+    
+    requests.forEach(request => {
+      request.donorRequests.forEach(donorReq => {
+        const key = `${donorReq.donorId}_${request.bloodGroup}`;
+        
+        if (!uniqueRequestsMap.has(key)) {
+          // Store the entire request but mark which donor request we're showing
+          uniqueRequestsMap.set(key, {
+            ...request.toObject(),
+            displayDonorRequest: donorReq,
+            isDuplicate: false
+          });
+        } else {
+          // Mark as duplicate for tracking
+          const existing = uniqueRequestsMap.get(key);
+          existing.isDuplicate = true;
+          existing.duplicateCount = (existing.duplicateCount || 1) + 1;
+        }
+      });
+    });
+
+    // Convert map back to array and enhance with donor info
+    const uniqueRequests = Array.from(uniqueRequestsMap.values()).map(item => ({
+      _id: item._id,
+      hospitalName: item.hospitalName,
+      bloodGroup: item.bloodGroup,
+      unitsRequired: item.unitsRequired,
+      urgency: item.urgency,
+      status: item.status,
+      purpose: item.purpose,
+      contactPerson: item.contactPerson,
+      contactNumber: item.contactNumber,
+      createdAt: item.createdAt,
+      // Single donor info for display
+      donorName: item.displayDonorRequest.donorName,
+      donorEmail: item.displayDonorRequest.donorEmail,
+      donorId: item.displayDonorRequest.donorId,
+      emailSent: item.displayDonorRequest.emailSent,
+      emailSentAt: item.displayDonorRequest.emailSentAt,
+      donorResponded: item.displayDonorRequest.donorResponded,
+      responseStatus: item.displayDonorRequest.responseStatus,
+      // Additional info
+      totalDonorsContacted: item.donorRequests.length,
+      emailsSent: item.donorRequests.filter(dr => dr.emailSent).length,
+      donorsResponded: item.donorRequests.filter(dr => dr.donorResponded).length,
+      // Duplicate info
+      hasDuplicates: item.isDuplicate,
+      duplicateCount: item.duplicateCount || 1
+    }));
+
+    res.json(uniqueRequests);
+  } catch (error) {
+    console.error('Error fetching unique email requests:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Keep all other existing routes
 router.get('/', auth, async (req, res) => {
   try {
     const { status, bloodGroup } = req.query;
@@ -155,7 +284,6 @@ router.get('/', auth, async (req, res) => {
     if (status) filter.status = status;
     if (bloodGroup) filter.bloodGroup = bloodGroup;
 
-    // If user is hospital, only show their requests
     if (req.user.role === 'hospital') {
       filter.hospitalId = req.user._id;
     }
@@ -165,10 +293,8 @@ router.get('/', auth, async (req, res) => {
       .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
       .sort({ createdAt: -1 });
 
-    // Enhanced response with contact information
     const enhancedRequests = requests.map(request => ({
       ...request.toObject(),
-      // Ensure contact info is available for hospitals/admins
       contactInfo: {
         hospitalContact: request.hospitalId?.contact,
         hospitalEmail: request.hospitalId?.email,
@@ -188,7 +314,6 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Get requests for admin with advanced filtering - ENHANCED
 router.get('/admin/all', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -207,7 +332,6 @@ router.get('/admin/all', auth, async (req, res) => {
       .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
       .sort({ createdAt: -1 });
 
-    // Add full contact information for admin
     const adminRequests = requests.map(request => ({
       ...request.toObject(),
       fullContactInfo: {
@@ -237,7 +361,6 @@ router.get('/admin/all', auth, async (req, res) => {
   }
 });
 
-// Get donor requests for a specific hospital - ENHANCED
 router.get('/hospital/donor-requests', auth, async (req, res) => {
   try {
     if (req.user.role !== 'hospital') {
@@ -251,7 +374,6 @@ router.get('/hospital/donor-requests', auth, async (req, res) => {
     .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
     .sort({ createdAt: -1 });
 
-    // Enhanced response with donor contact info for hospital
     const enhancedRequests = requests.map(request => ({
       ...request.toObject(),
       donorContactInfo: request.donorRequests.map(dr => ({
@@ -276,7 +398,6 @@ router.get('/hospital/donor-requests', auth, async (req, res) => {
   }
 });
 
-// NEW: Get email delivery status
 router.get('/email-status/:requestId', auth, async (req, res) => {
   try {
     const request = await Request.findById(req.params.requestId)
@@ -286,7 +407,6 @@ router.get('/email-status/:requestId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Request not found' });
     }
 
-    // Check if user has permission
     if (req.user.role === 'hospital' && request.hospitalId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Access denied' });
     }
@@ -314,7 +434,59 @@ router.get('/email-status/:requestId', auth, async (req, res) => {
   }
 });
 
-// Keep all other existing routes (they're already good)
-// ... [rest of your existing routes remain unchanged]
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const request = await Request.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    ).populate('hospitalId', 'hospitalName email contact');
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    res.json(request);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+router.get('/stats', auth, async (req, res) => {
+  try {
+    let filter = {};
+    
+    if (req.user.role === 'hospital') {
+      filter.hospitalId = req.user._id;
+    }
+
+    const totalRequests = await Request.countDocuments(filter);
+    const pendingRequests = await Request.countDocuments({ ...filter, status: 'pending' });
+    const approvedRequests = await Request.countDocuments({ ...filter, status: 'approved' });
+    const rejectedRequests = await Request.countDocuments({ ...filter, status: 'rejected' });
+
+    const bloodGroupStats = await Request.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: '$bloodGroup',
+          count: { $sum: 1 },
+          totalUnits: { $sum: '$unitsRequired' }
+        }
+      }
+    ]);
+
+    res.json({
+      totalRequests,
+      pendingRequests,
+      approvedRequests,
+      rejectedRequests,
+      bloodGroupStats
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 module.exports = router;

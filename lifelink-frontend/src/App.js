@@ -14,9 +14,10 @@ import Donations from './pages/Donations';
 import HelpRestock from './pages/HelpRestock';
 import About from './pages/About';
 import RecordDonation from './pages/RecordDonation';
-import BloodRequest from './pages/BloodRequest'; // ADD THIS IMPORT
+import BloodRequest from './pages/BloodRequest';
 import './App.css';
 
+// Simple ProtectedRoute component
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
   
@@ -44,7 +45,7 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/about" element={<About />} />
               
-              {/* ADD THIS NEW ROUTE FOR BLOOD REQUEST */}
+              {/* Blood Request Route */}
               <Route 
                 path="/blood-request" 
                 element={
@@ -71,6 +72,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
               <Route 
                 path="/donors" 
                 element={
@@ -79,6 +81,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
               <Route 
                 path="/requests" 
                 element={
@@ -87,6 +90,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
               <Route 
                 path="/admin" 
                 element={
@@ -95,6 +99,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
               <Route 
                 path="/donations" 
                 element={
@@ -103,6 +108,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              
               <Route 
                 path="/help-restock" 
                 element={

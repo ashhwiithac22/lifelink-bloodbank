@@ -1,4 +1,3 @@
-/* lifelink-frontend/src/pages/Dashboard.js */
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,10 +14,57 @@ const Dashboard = () => {
   const [inventoryStats, setInventoryStats] = useState({});
   const [availability, setAvailability] = useState(user?.availability || false);
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
 
   useEffect(() => {
     loadDashboardData();
+    
+    // Set up polling for real-time updates (every 30 seconds)
+    const interval = setInterval(() => {
+      if (user?.role === 'hospital') {
+        loadRecentRequests();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [user]);
+
+  const loadRecentRequests = async () => {
+    try {
+      if (user?.role === 'hospital') {
+        const response = await requestsAPI.getHospitalDonorRequests();
+        const requests = response.data || [];
+        
+        // Filter unique requests and update state
+        const uniqueRequests = filterUniqueRequests(requests).slice(0, 5);
+        setRecentRequests(uniqueRequests);
+        setLastUpdate(new Date());
+      }
+    } catch (error) {
+      console.error('Error polling for requests:', error);
+    }
+  };
+
+  const filterUniqueRequests = (requests) => {
+    const uniqueMap = new Map();
+    
+    requests.forEach(request => {
+      request.donorRequests.forEach(donorReq => {
+        const key = `${donorReq.donorId}_${request.bloodGroup}`;
+        if (!uniqueMap.has(key) || new Date(request.createdAt) > new Date(uniqueMap.get(key).createdAt)) {
+          uniqueMap.set(key, {
+            ...request,
+            displayDonorRequest: donorReq,
+            totalDonorsContacted: request.donorRequests.length,
+            emailsSent: request.donorRequests.filter(dr => dr.emailSent).length,
+            donorsResponded: request.donorRequests.filter(dr => dr.donorResponded).length
+          });
+        }
+      });
+    });
+    
+    return Array.from(uniqueMap.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  };
 
   const loadDashboardData = async () => {
     try {
@@ -38,25 +84,30 @@ const Dashboard = () => {
         calculateInventoryStats(inventoryResponse.data);
       } else if (user?.role === 'hospital') {
         const [requestsResponse, inventoryResponse, donorsResponse, donationsResponse] = await Promise.all([
-          requestsAPI.getAll(),
+          requestsAPI.getHospitalDonorRequests(),
           inventoryAPI.getAll(),
           donorsAPI.getAll({ availability: true }),
           donationsAPI.getStats()
         ]);
         
+        const requests = requestsResponse.data || [];
+        const uniqueRequests = filterUniqueRequests(requests);
+        
         setStats({ 
-          totalRequests: requestsResponse.data.length,
-          pendingRequests: requestsResponse.data.filter(req => req.status === 'pending').length,
-          approvedRequests: requestsResponse.data.filter(req => req.status === 'approved').length
+          totalRequests: uniqueRequests.length,
+          pendingRequests: uniqueRequests.filter(req => req.status === 'pending').length,
+          approvedRequests: uniqueRequests.filter(req => req.status === 'approved').length,
+          totalDonorsContacted: uniqueRequests.reduce((sum, req) => sum + (req.totalDonorsContacted || 0), 0),
+          emailsSent: uniqueRequests.reduce((sum, req) => sum + (req.emailsSent || 0), 0)
         });
-        setRecentRequests(requestsResponse.data.slice(0, 5));
+        
+        setRecentRequests(uniqueRequests.slice(0, 5));
         setRecentDonors(donorsResponse.data.slice(0, 4));
         calculateInventoryStats(inventoryResponse.data);
       } else if (user?.role === 'donor') {
-        // FIXED: Use getAll donations and they'll be filtered by backend based on token
         const [inventoryResponse, donationsResponse] = await Promise.all([
           inventoryAPI.getAll(),
-          donationsAPI.getAll() // CHANGED: Removed getByDonor, using getAll instead
+          donationsAPI.getAll()
         ]);
         
         const donorDonations = donationsResponse.data || [];
@@ -69,13 +120,22 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      // Set default empty states for donor if donations API fails
+      // Set default empty states
       if (user?.role === 'donor') {
         setStats({ 
           totalDonations: 0,
           totalUnits: 0
         });
         setRecentDonations([]);
+      } else if (user?.role === 'hospital') {
+        setStats({ 
+          totalRequests: 0,
+          pendingRequests: 0,
+          approvedRequests: 0,
+          totalDonorsContacted: 0,
+          emailsSent: 0
+        });
+        setRecentRequests([]);
       }
     } finally {
       setLoading(false);
@@ -104,9 +164,7 @@ const Dashboard = () => {
     }
   };
 
-  // FIXED: Handle Record Donation click
   const handleRecordDonation = () => {
-    // REMOVED the user check since ProtectedRoute ensures user is logged in
     navigate('/record-donation');
   };
 
@@ -129,17 +187,38 @@ const Dashboard = () => {
     return <span className={`urgency-badge ${urgencyClasses[urgency]}`}>{urgency}</span>;
   };
 
+  const formatDonorInfo = (request) => {
+    const contactedDonors = request.totalDonorsContacted || 1;
+    const respondedDonors = request.donorsResponded || 0;
+    const emailSentDonors = request.emailsSent || 1;
+    
+    return `${contactedDonors} donor${contactedDonors !== 1 ? 's' : ''} • ${emailSentDonors} email${emailSentDonors !== 1 ? 's' : ''} sent • ${respondedDonors} responded`;
+  };
+
+  const getDonorNames = (request) => {
+    if (!request.displayDonorRequest) return '';
+    return request.displayDonorRequest.donorName || 'Unknown';
+  };
+
+  const handleRefresh = () => {
+    setLoading(true);
+    loadDashboardData();
+  };
+
   if (loading) return <div className="loading">Loading dashboard...</div>;
 
   return (
     <div className="dashboard-page">
       <div className="container">
-        {/* Enhanced Header */}
+        {/* Header */}
         <div className="dashboard-header">
           <div className="header-content">
             <div className="header-text">
               <h1>Welcome back, {user?.name}! 👋</h1>
               <p>Here's what's happening with your blood bank today</p>
+              <div className="connection-status connected">
+                🔄 Auto-update active (30s)
+              </div>
             </div>
             <div className="header-badges">
               <div className="role-badge">
@@ -150,6 +229,13 @@ const Dashboard = () => {
                   {availability ? '🟢 Available' : '🔴 Unavailable'}
                 </div>
               )}
+              <button 
+                className="refresh-btn"
+                onClick={handleRefresh}
+                title="Refresh data"
+              >
+                🔄
+              </button>
             </div>
           </div>
           <div className="header-stats">
@@ -170,7 +256,7 @@ const Dashboard = () => {
 
         {/* Main Dashboard Grid */}
         <div className="dashboard-grid">
-          {/* Left Column - Stats & Quick Actions */}
+          {/* Left Column */}
           <div className="dashboard-column">
             {/* Quick Actions */}
             <div className="quick-actions-card">
@@ -178,7 +264,6 @@ const Dashboard = () => {
               <div className="actions-grid">
                 {user?.role === 'donor' && (
                   <>
-                    {/* FIXED: Record Donation button */}
                     <div className="action-card" onClick={handleRecordDonation}>
                       <div className="action-icon">🩸</div>
                       <div className="action-content">
@@ -214,30 +299,30 @@ const Dashboard = () => {
                 )}
                 
                 {user?.role === 'hospital' && (
-  <>
-    <Link to="/blood-request" className="action-card">
-      <div className="action-icon">🆕</div>
-      <div className="action-content">
-        <h3>New Request</h3>
-        <p>Send request to donors via email</p>
-      </div>
-    </Link>
-    <Link to="/donors" className="action-card">
-      <div className="action-icon">🔍</div>
-      <div className="action-content">
-        <h3>Find Donors</h3>
-        <p>Search available donors</p>
-      </div>
-    </Link>
-    <Link to="/requests" className="action-card">
-      <div className="action-icon">📋</div>
-      <div className="action-content">
-        <h3>My Requests</h3>
-        <p>View all requests</p>
-      </div>
-    </Link>
-  </>
-)}
+                  <>
+                    <Link to="/blood-request" className="action-card">
+                      <div className="action-icon">🆕</div>
+                      <div className="action-content">
+                        <h3>New Request</h3>
+                        <p>Send request to donors via email</p>
+                      </div>
+                    </Link>
+                    <Link to="/donors" className="action-card">
+                      <div className="action-icon">🔍</div>
+                      <div className="action-content">
+                        <h3>Find Donors</h3>
+                        <p>Search available donors</p>
+                      </div>
+                    </Link>
+                    <Link to="/requests" className="action-card">
+                      <div className="action-icon">📋</div>
+                      <div className="action-content">
+                        <h3>My Requests</h3>
+                        <p>View all requests</p>
+                      </div>
+                    </Link>
+                  </>
+                )}
                 
                 {user?.role === 'admin' && (
                   <>
@@ -267,7 +352,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Role-Specific Statistics */}
+            {/* Statistics */}
             <div className="stats-card">
               <h2>📈 Statistics Overview</h2>
               <div className="stats-grid">
@@ -278,7 +363,6 @@ const Dashboard = () => {
                       <div className="stat-info">
                         <h3>Total Donors</h3>
                         <p className="stat-number">{stats.totalDonors || 0}</p>
-                        <span className="stat-trend trend-up">+12%</span>
                       </div>
                     </div>
                     <div className="stat-item">
@@ -300,7 +384,6 @@ const Dashboard = () => {
                       <div className="stat-info">
                         <h3>Pending</h3>
                         <p className="stat-number">{stats.pendingRequests || 0}</p>
-                        <span className="stat-trend trend-down">-5%</span>
                       </div>
                     </div>
                   </>
@@ -309,24 +392,24 @@ const Dashboard = () => {
                 {user?.role === 'hospital' && (
                   <>
                     <div className="stat-item">
-                      <div className="stat-icon">📋</div>
+                      <div className="stat-icon">📧</div>
                       <div className="stat-info">
                         <h3>My Requests</h3>
                         <p className="stat-number">{stats.totalRequests || 0}</p>
                       </div>
                     </div>
                     <div className="stat-item">
-                      <div className="stat-icon">⏳</div>
+                      <div className="stat-icon">👥</div>
                       <div className="stat-info">
-                        <h3>Pending</h3>
-                        <p className="stat-number">{stats.pendingRequests || 0}</p>
+                        <h3>Donors Contacted</h3>
+                        <p className="stat-number">{stats.totalDonorsContacted || 0}</p>
                       </div>
                     </div>
                     <div className="stat-item">
                       <div className="stat-icon">✅</div>
                       <div className="stat-info">
-                        <h3>Approved</h3>
-                        <p className="stat-number">{stats.approvedRequests || 0}</p>
+                        <h3>Emails Sent</h3>
+                        <p className="stat-number">{stats.emailsSent || 0}</p>
                       </div>
                     </div>
                     <div className="stat-item">
@@ -378,48 +461,45 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
-
-            {/* Empty State for Donors with No Donations */}
-            {user?.role === 'donor' && stats.totalDonations === 0 && (
-              <div className="empty-state-card">
-                <div className="empty-icon">🩸</div>
-                <div className="empty-content">
-                  <h3>No Donations Yet</h3>
-                  <p>Start your life-saving journey by recording your first blood donation.</p>
-                  <button 
-                    className="btn btn-primary"
-                    onClick={handleRecordDonation}
-                  >
-                    Record First Donation
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Right Column - Activity & Inventory */}
+          {/* Right Column */}
           <div className="dashboard-column">
-            {/* Recent Activity */}
+            {/* Recent Email Requests */}
             {(user?.role === 'admin' || user?.role === 'hospital') && (
               <div className="activity-card">
                 <div className="card-header">
-                  <h2>📋 Recent Requests</h2>
-                  <Link to="/requests" className="view-all">View All →</Link>
+                  <div className="header-title">
+                    <h2>📧 My Email Requests</h2>
+                    <span className="live-badge">AUTO-UPDATE</span>
+                  </div>
+                  <div className="header-actions">
+                    <span className="last-update">
+                      Updated: {lastUpdate.toLocaleTimeString()}
+                    </span>
+                    <Link to="/requests" className="view-all">View All →</Link>
+                  </div>
                 </div>
                 <div className="activity-list">
                   {recentRequests.length > 0 ? (
                     recentRequests.map(request => (
                       <div key={request._id} className="activity-item">
-                        <div className="activity-icon">🏥</div>
+                        <div className="activity-icon">📧</div>
                         <div className="activity-content">
-                          <h4>{request.hospitalName}</h4>
+                          <h4>Blood Request</h4>
                           <p>
                             <span className="blood-type">{request.bloodGroup}</span> • 
-                            {request.unitsRequired} units • 
+                            {request.unitsRequired} unit{request.unitsRequired !== 1 ? 's' : ''} • 
                             {getUrgencyBadge(request.urgency)}
                           </p>
+                          <p className="donor-info">
+                            To: <strong>{getDonorNames(request)}</strong>
+                          </p>
+                          <p className="email-status">
+                            {formatDonorInfo(request)}
+                          </p>
                           <span className="activity-time">
-                            {new Date(request.createdAt).toLocaleDateString()}
+                            Sent {new Date(request.createdAt).toLocaleDateString()} at {new Date(request.createdAt).toLocaleTimeString()}
                           </span>
                         </div>
                         <div className="activity-status">
@@ -429,49 +509,47 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <div className="empty-state">
-                      <p>No recent requests</p>
+                      <p>No email requests sent yet</p>
+                      {user?.role === 'hospital' && (
+                        <Link to="/blood-request" className="btn btn-primary btn-sm">
+                          Send Your First Request
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Recent Donors for Admin */}
-            {user?.role === 'admin' && (
+            {/* Other dashboard components remain the same */}
+            {user?.role === 'admin' && recentDonors.length > 0 && (
               <div className="donors-card">
                 <div className="card-header">
                   <h2>👥 Available Donors</h2>
                   <Link to="/donors" className="view-all">View All →</Link>
                 </div>
                 <div className="donors-list">
-                  {recentDonors.length > 0 ? (
-                    recentDonors.map(donor => (
-                      <div key={donor._id} className="donor-item">
-                        <div className="donor-avatar">
-                          {donor.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="donor-info">
-                          <h4>{donor.name}</h4>
-                          <p>
-                            <span className="blood-type">{donor.bloodGroup}</span> • 
-                            {donor.city} • {donor.age} yrs
-                          </p>
-                        </div>
-                        <div className={`availability-status ${donor.availability ? 'available' : 'unavailable'}`}>
-                          {donor.availability ? '🟢' : '🔴'}
-                        </div>
+                  {recentDonors.map(donor => (
+                    <div key={donor._id} className="donor-item">
+                      <div className="donor-avatar">
+                        {donor.name.charAt(0).toUpperCase()}
                       </div>
-                    ))
-                  ) : (
-                    <div className="empty-state">
-                      <p>No available donors</p>
+                      <div className="donor-info">
+                        <h4>{donor.name}</h4>
+                        <p>
+                          <span className="blood-type">{donor.bloodGroup}</span> • 
+                          {donor.city} • {donor.age} yrs
+                        </p>
+                      </div>
+                      <div className={`availability-status ${donor.availability ? 'available' : 'unavailable'}`}>
+                        {donor.availability ? '🟢' : '🔴'}
+                      </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Recent Donations for Donors */}
             {user?.role === 'donor' && recentDonations.length > 0 && (
               <div className="donations-card">
                 <div className="card-header">
