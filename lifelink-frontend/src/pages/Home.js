@@ -1,3 +1,4 @@
+//src/pages/Home.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -92,20 +93,46 @@ const loadHomeStats = async () => {
               </>
             ) : (
               <div className="user-welcome-buttons">
-                <Link to="/dashboard" className="btn btn-primary btn-large">
-                  📊 Go to Dashboard
-                </Link>
-                {user.role === 'hospital' && (
-                  <Link to="/requests" className="btn btn-secondary btn-large">
-                    📋 Make a Request
-                  </Link>
-                )}
-                {user.role === 'donor' && (
-                  <Link to="/donors" className="btn btn-secondary btn-large">
-                    🔍 Find Donors
-                  </Link>
-                )}
-              </div>
+  <Link to="/dashboard" className="btn btn-primary btn-large">
+    📊 Go to Dashboard
+  </Link>
+  
+  {/* HOSPITAL: Can make requests and find donors */}
+  {user.role === 'hospital' && (
+    <>
+      <Link to="/requests" className="btn btn-secondary btn-large">
+        📋 Make a Request
+      </Link>
+      <Link to="/donors" className="btn btn-secondary btn-large">
+        🔍 Find Donors
+      </Link>
+    </>
+  )}
+  
+  {/* ADMIN: Can find donors and access admin panel */}
+  {user.role === 'admin' && (
+    <>
+      <Link to="/donors" className="btn btn-secondary btn-large">
+        🔍 Find Donors
+      </Link>
+      <Link to="/admin" className="btn btn-secondary btn-large">
+        ⚙️ Admin Panel
+      </Link>
+    </>
+  )}
+  
+  {/* DONOR: Can view donations and help restock */}
+  {user.role === 'donor' && (
+    <>
+      <Link to="/donations" className="btn btn-secondary btn-large">
+        💉 My Donations
+      </Link>
+      <Link to="/help-restock" className="btn btn-secondary btn-large">
+        🩸 Help Restock
+      </Link>
+    </>
+  )}
+</div>
             )}
           </div>
         </div>
@@ -133,15 +160,15 @@ const loadHomeStats = async () => {
               </ul>
             </div>
             
-            <div className="feature-card">
-              <div className="feature-icon">🔍</div>
-              <h3>Smart Matching</h3>
-              <p>Advanced search to find compatible donors based on blood type, location, and availability.</p>
-              <ul className="feature-list">
-                <li>Location-based filtering</li>
-                <li>Real-time availability</li>
-                <li>Emergency matching</li>
-              </ul>
+             <div className="feature-card">
+              <div className="feature-icon">👥</div>
+              <h3>Donor Management</h3>
+              <p>Comprehensive donor profiles with availability status and contact information.</p>
+             <ul className="feature-list">
+             <li>Donor availability status</li>
+             <li>Contact information</li>
+             <li>Donation history records</li>
+             </ul>
             </div>
             
             <div className="feature-card">
@@ -192,76 +219,182 @@ const loadHomeStats = async () => {
       </section>
 
       {/* Blood Types Info */}
-      <section className="blood-types-section">
-        <div className="container">
-          <div className="section-header">
-            <h2>Blood Types & Compatibility</h2>
-            <p className="section-subtitle">
-              Understanding blood types is crucial for safe transfusions
-            </p>
-          </div>
-          
-          <div className="blood-types-grid">
-            <div className="blood-type-card a-plus">
-              <div className="blood-type-header">
-                <h3>A+</h3>
-                <span className="blood-percentage">34%</span>
-              </div>
-              <p>Can donate to: A+, AB+</p>
-              <p>Can receive from: A+, A-, O+, O-</p>
-            </div>
-            
-            <div className="blood-type-card o-plus">
-              <div className="blood-type-header">
-                <h3>O+</h3>
-                <span className="blood-percentage">38%</span>
-              </div>
-              <p>Can donate to: O+, A+, B+, AB+</p>
-              <p>Can receive from: O+, O-</p>
-            </div>
-            
-            <div className="blood-type-card b-plus">
-              <div className="blood-type-header">
-                <h3>B+</h3>
-                <span className="blood-percentage">9%</span>
-              </div>
-              <p>Can donate to: B+, AB+</p>
-              <p>Can receive from: B+, B-, O+, O-</p>
-            </div>
-            
-            <div className="blood-type-card ab-plus">
-              <div className="blood-type-header">
-                <h3>AB+</h3>
-                <span className="blood-percentage">3%</span>
-              </div>
-              <p>Can donate to: AB+</p>
-              <p>Can receive from: All blood types</p>
-            </div>
-          </div>
+      {/* Blood Types Info */}
+<section className="blood-types-section">
+  <div className="container">
+    <div className="section-header">
+      <h2>Blood Types & Compatibility</h2>
+      <p className="section-subtitle">
+        Understanding blood types is crucial for safe transfusions
+      </p>
+    </div>
+    
+    <div className="blood-types-grid">
+      {/* A+ */}
+      <div className="blood-type-card a-plus">
+        <div className="blood-type-header">
+          <h3>A+</h3>
+          <span className="blood-percentage">34%</span>
         </div>
-      </section>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>A+, AB+</strong></p>
+          <p className="receive-from"> Can receive from: <strong>A+, A-, O+, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-recipient">Universal Recipient: No</span>
+        </div>
+      </div>
+      
+      {/* A- */}
+      <div className="blood-type-card a-minus">
+        <div className="blood-type-header">
+          <h3>A-</h3>
+          <span className="blood-percentage">6%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>A+, A-, AB+, AB-</strong></p>
+          <p className="receive-from"> Can receive from: <strong>A-, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-donor">Universal Donor: No</span>
+        </div>
+      </div>
+      
+      {/* B+ */}
+      <div className="blood-type-card b-plus">
+        <div className="blood-type-header">
+          <h3>B+</h3>
+          <span className="blood-percentage">9%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>B+, AB+</strong></p>
+          <p className="receive-from"> Can receive from: <strong>B+, B-, O+, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-recipient">Universal Recipient: No</span>
+        </div>
+      </div>
+      
+      {/* B- */}
+      <div className="blood-type-card b-minus">
+        <div className="blood-type-header">
+          <h3>B-</h3>
+          <span className="blood-percentage">2%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>B+, B-, AB+, AB-</strong></p>
+          <p className="receive-from"> Can receive from: <strong>B-, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-donor">Universal Donor: No</span>
+        </div>
+      </div>
+      
+      {/* AB+ */}
+      <div className="blood-type-card ab-plus">
+        <div className="blood-type-header">
+          <h3>AB+</h3>
+          <span className="blood-percentage">3%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>AB+</strong></p>
+          <p className="receive-from"> Can receive from: <strong>All blood types</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-recipient special"> Universal Recipient</span>
+        </div>
+      </div>
+      
+      {/* AB- */}
+      <div className="blood-type-card ab-minus">
+        <div className="blood-type-header">
+          <h3>AB-</h3>
+          <span className="blood-percentage">1%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>AB+, AB-</strong></p>
+          <p className="receive-from"> Can receive from: <strong>AB-, A-, B-, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-recipient">Universal Recipient: No</span>
+        </div>
+      </div>
+      
+      {/* O+ */}
+      <div className="blood-type-card o-plus">
+        <div className="blood-type-header">
+          <h3>O+</h3>
+          <span className="blood-percentage">38%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>O+, A+, B+, AB+</strong></p>
+          <p className="receive-from"> Can receive from: <strong>O+, O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-donor">Universal Donor: No</span>
+        </div>
+      </div>
+      
+      {/* O- */}
+      <div className="blood-type-card o-minus">
+        <div className="blood-type-header">
+          <h3>O-</h3>
+          <span className="blood-percentage">7%</span>
+        </div>
+        <div className="compatibility-info">
+          <p className="donate-to">🩸 Can donate to: <strong>All blood types</strong></p>
+          <p className="receive-from"> Can receive from: <strong>O-</strong></p>
+        </div>
+        <div className="blood-type-footer">
+          <span className="universal-donor special"> Universal Donor</span>
+        </div>
+      </div>
+    </div>
 
-      {/* Inventory Section */}
-      <section className="inventory-section">
-        <div className="container">
-          <div className="section-header">
-            <h2>Current Blood Availability</h2>
-            <p className="section-subtitle">
-              Real-time blood stock levels across all blood types
-            </p>
-          </div>
-          <BloodInventory />
-          
-          <div className="inventory-actions">
-            <Link to="/register?role=donor" className="btn btn-primary">
-              🩸 Help Restock
-            </Link>
-            <Link to="/login" className="btn btn-outline">
-              📊 View Details
-            </Link>
-          </div>
-        </div>
-      </section>
+    {/* Blood Type Legend */}
+    <div className="blood-type-legend">
+      <div className="legend-item">
+        <div className="legend-color universal-donor"></div>
+        <span>Universal Donor</span>
+      </div>
+      <div className="legend-item">
+        <div className="legend-color universal-recipient"></div>
+        <span>Universal Recipient</span>
+      </div>
+      <div className="legend-item">
+        <div className="legend-color rare-type"></div>
+        <span>Rare Blood Type</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+   <div className="inventory-actions">
+  {!user ? (
+    <Link to="/register?role=donor" className="btn btn-primary">
+      🩸 Help Restock
+    </Link>
+  ) : (
+    <Link to="/help-restock" className="btn btn-primary">
+      🩸 Help Restock
+    </Link>
+  )}
+  
+  {/* Smart redirect based on user role */}
+  {!user ? (
+    <Link to="/login" className="btn btn-outline">
+      🔍 Find Donors
+    </Link>
+  ) : user.role === 'hospital' || user.role === 'admin' ? (
+    <Link to="/donors" className="btn btn-outline">
+      🔍 Find Donors
+    </Link>
+  ) : (
+    <Link to="/donations" className="btn btn-outline">
+      💉 My Donations
+    </Link>
+  )}
+</div>
 
       {/* CTA Section */}
       <section className="cta-section">
@@ -272,13 +405,13 @@ const loadHomeStats = async () => {
               Join thousands of life-savers in our community. Your single donation can help multiple patients.
             </p>
             <div className="cta-buttons">
-              <Link to="/register?role=donor" className="btn btn-primary btn-large">
-                Start Saving Lives Today
-              </Link>
-              <Link to="/login" className="btn btn-outline btn-large">
-                Learn More
-              </Link>
-            </div>
+  <Link to="/register?role=donor" className="btn btn-primary btn-large">
+    Start Saving Lives Today
+  </Link>
+  <Link to="/about" className="btn btn-outline btn-large">
+    Learn More
+  </Link>
+</div>
           </div>
         </div>
       </section>

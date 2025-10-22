@@ -1,4 +1,3 @@
-//lifelink-frontend/src/services/api.js
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -26,18 +25,22 @@ export const donorsAPI = {
   getAll: (filters = {}) => api.get('/donors', { params: filters }),
   updateAvailability: (availability) => api.put('/donors/availability', { availability }),
   getProfile: () => api.get('/donors/profile'),
+  getStats: () => api.get('/donors/stats'),
 };
 
 export const requestsAPI = {
   create: (requestData) => api.post('/requests', requestData),
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
+  getAdminAll: (filters = {}) => api.get('/requests/admin/all', { params: filters }),
   updateStatus: (id, status) => api.put(`/requests/${id}`, { status }),
+  getStats: () => api.get('/requests/stats'),
+  search: (filters = {}) => api.get('/requests/search', { params: filters }),
 };
 
 export const inventoryAPI = {
   getAll: () => api.get('/inventory'),
   update: (data) => api.put('/inventory/update', data),
-  adjust: (data) => api.put('/inventory/adjust', data), // ADD THIS
+  adjust: (data) => api.put('/inventory/adjust', data),
 };
 
 export const adminAPI = {

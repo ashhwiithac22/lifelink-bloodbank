@@ -1,3 +1,4 @@
+// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -10,8 +11,10 @@ import Dashboard from './pages/Dashboard';
 import DonorSearch from './pages/DonorSearch';
 import HospitalRequests from './pages/HospitalRequests';
 import AdminPanel from './pages/AdminPanel';
-import Donations from './pages/Donations'; // ADD THIS IMPORT
+import Donations from './pages/Donations';
+import HelpRestock from './pages/HelpRestock'; // ✅ ADD THIS IMPORT
 import './App.css';
+import About from './pages/About';
 
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const { user } = useAuth();
@@ -38,6 +41,7 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/about" element={<About />} />
               <Route 
                 path="/dashboard" 
                 element={
@@ -70,12 +74,20 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              {/* ADD DONATIONS ROUTE HERE */}
               <Route 
                 path="/donations" 
                 element={
                   <ProtectedRoute allowedRoles={['donor', 'admin', 'hospital']}>
                     <Donations />
+                  </ProtectedRoute>
+                } 
+              />
+              {/* ✅ ADD HELP RESTOCK ROUTE */}
+              <Route 
+                path="/help-restock" 
+                element={
+                  <ProtectedRoute allowedRoles={['donor', 'hospital', 'admin']}>
+                    <HelpRestock />
                   </ProtectedRoute>
                 } 
               />

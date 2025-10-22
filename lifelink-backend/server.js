@@ -1,7 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const donationRoutes = require('./routes/donations');
 require('dotenv').config();
 
 const app = express();
@@ -9,13 +8,14 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/api/donations', donationRoutes);
 
 // Debug: Check if environment variables are loaded
 console.log('🔧 Environment check:');
 console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
 console.log('PORT:', process.env.PORT);
 console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
+console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
 
 // Database connection
 const connectDB = async () => {
@@ -48,52 +48,29 @@ mongoose.connection.on('error', (err) => {
   console.error('❌ Mongoose connection error:', err.message);
 });
 
-// ✅ IMPORTANT: Import and use routes CORRECTLY
 // Test route first to verify basic routing works
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Test route working!' });
 });
 
-// Now import and use your routes
-try {
-  const authRoutes = require('./routes/auth');
-  app.use('/api/auth', authRoutes);
-  console.log('✅ Auth routes loaded');
-} catch (error) {
-  console.error('❌ Failed to load auth routes:', error.message);
-}
+// Import and use routes - SIMPLE AND SAFE
+const authRoutes = require('./routes/auth');
+const donorRoutes = require('./routes/donors');
+const donationRoutes = require('./routes/donations');
+const requestRoutes = require('./routes/requests');
+const inventoryRoutes = require('./routes/inventory');
+const adminRoutes = require('./routes/admin');
+const analyticsRoutes = require('./routes/analytics');
 
-try {
-  const donorRoutes = require('./routes/donors');
-  app.use('/api/donors', donorRoutes);
-  console.log('✅ Donor routes loaded');
-} catch (error) {
-  console.error('❌ Failed to load donor routes:', error.message);
-}
+app.use('/api/auth', authRoutes);
+app.use('/api/donors', donorRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/requests', requestRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
-try {
-  const requestRoutes = require('./routes/requests');
-  app.use('/api/requests', requestRoutes);
-  console.log('✅ Request routes loaded');
-} catch (error) {
-  console.error('❌ Failed to load request routes:', error.message);
-}
-
-try {
-  const inventoryRoutes = require('./routes/inventory');
-  app.use('/api/inventory', inventoryRoutes);
-  console.log('✅ Inventory routes loaded');
-} catch (error) {
-  console.error('❌ Failed to load inventory routes:', error.message);
-}
-
-try {
-  const adminRoutes = require('./routes/admin');
-  app.use('/api/admin', adminRoutes);
-  console.log('✅ Admin routes loaded');
-} catch (error) {
-  console.error('❌ Failed to load admin routes:', error.message);
-}
+console.log('✅ All routes loaded successfully');
 
 // Basic route
 app.get('/', (req, res) => {
@@ -104,9 +81,11 @@ app.get('/', (req, res) => {
     endpoints: [
       '/api/auth',
       '/api/donors', 
+      '/api/donations',
       '/api/requests',
       '/api/inventory',
-      '/api/admin'
+      '/api/admin',
+      '/api/analytics'
     ]
   });
 });
@@ -119,9 +98,27 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     database: dbStatus,
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
   });
 });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('🚨 Server Error:', err.stack);
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'production' ? {} : err.message 
+  });
+});
+
+// FIXED 404 handler - remove the problematic line
+// app.use('*', (req, res) => {
+//   res.status(404).json({ 
+//     message: 'Route not found',
+//     path: req.originalUrl 
+//   });
+// });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

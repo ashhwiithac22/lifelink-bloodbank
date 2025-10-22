@@ -1,3 +1,4 @@
+//routes/donations.js
 const express = require('express');
 const Donation = require('../models/Donation');
 const Inventory = require('../models/Inventory');
@@ -5,6 +6,7 @@ const User = require('../models/User');
 
 const router = express.Router();
 
+// Record a new donation
 // Record a new donation
 router.post('/', async (req, res) => {
   try {
@@ -21,7 +23,7 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const { bloodGroup, unitsDonated, hospitalId, hospitalName } = req.body;
+    const { bloodGroup, unitsDonated, hospitalId, hospitalName, helpRestock, restockMessage, contactNumber, city } = req.body;
 
     // Create donation record
     const donation = await Donation.create({
@@ -30,7 +32,11 @@ router.post('/', async (req, res) => {
       bloodGroup,
       unitsDonated,
       hospitalId,
-      hospitalName
+      hospitalName,
+      helpRestock: helpRestock || false,
+      restockMessage: restockMessage || '',
+      contactNumber: contactNumber || user.contact,
+      city: city || user.city
     });
 
     // ✅ AUTO-INCREASE INVENTORY
@@ -46,7 +52,8 @@ router.post('/', async (req, res) => {
 
     res.status(201).json({
       donation,
-      updatedInventory: inventory
+      updatedInventory: inventory,
+      message: helpRestock ? 'Thank you for helping restock our inventory!' : 'Donation recorded successfully'
     });
 
   } catch (error) {

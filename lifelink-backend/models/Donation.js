@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-
 const donationSchema = new mongoose.Schema({
   donorId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -19,7 +18,7 @@ const donationSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1,
-    max: 2 // Typically 1-2 units per donation
+    max: 2
   },
   donationDate: {
     type: Date,
@@ -36,6 +35,20 @@ const donationSchema = new mongoose.Schema({
     type: String,
     enum: ['completed', 'scheduled', 'cancelled'],
     default: 'completed'
+  },
+  // ✅ ADD THESE FIELDS FOR HELP RESTOCK
+  helpRestock: {
+    type: Boolean,
+    default: false
+  },
+  restockMessage: {
+    type: String
+  },
+  contactNumber: {
+    type: String
+  },
+  city: {
+    type: String
   }
 }, {
   timestamps: true
