@@ -282,12 +282,6 @@ const AdminManageRequests = () => {
                         </div>
                       </div>
                       <div className="inventory-actions">
-                        <button 
-                          onClick={() => handleNotifyHospitals(item.bloodGroup)}
-                          className="btn btn-warning btn-sm"
-                        >
-                          📢 Notify Hospitals
-                        </button>
                       </div>
                     </div>
                   ))
