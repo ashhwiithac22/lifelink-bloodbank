@@ -30,8 +30,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://lifelink-bloodbank.netlify.app',
-    'https://*.netlify.app',
-    'https://*.vercel.app',
+    'https://lifelink-bloodbank.vercel.app', 
     'https://*.onrender.com'
   ],
   credentials: true,
