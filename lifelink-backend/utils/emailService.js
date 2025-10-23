@@ -1,3 +1,4 @@
+//backend/utils/emailService.js
 const nodemailer = require('nodemailer');
 
 // Create transporter with correct syntax
@@ -124,6 +125,63 @@ const emailTemplates = {
             <p style="margin: 0; font-size: 11px; color: #999;">
               This is an automated message. Please do not reply directly to this email.<br>
               Contact the hospital directly using the phone number provided above.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  }),
+
+  // NEW: Admin to Donor Email Template
+  adminToDonor: (admin, donor, subject, body) => ({
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
+    to: donor.email,
+    subject: subject,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px; }
+          .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #dc3545; padding-bottom: 20px; }
+          .content { line-height: 1.6; color: #333; white-space: pre-line; }
+          .footer { text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+          .admin-info { background: #e7f3ff; padding: 15px; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="color: #dc3545; margin: 0;">LifeLink Blood Bank</h1>
+            <p style="color: #666; margin: 5px 0 0 0;">Saving Lives Together</p>
+          </div>
+
+          <div class="content">
+            <p>Dear <strong>${donor.name}</strong>,</p>
+            
+            ${body.replace(/\n/g, '<br>')}
+            
+            <div class="admin-info">
+              <p style="margin: 0;">
+                <strong>Sent by:</strong> ${admin.name} (Admin)<br>
+                <strong>Blood Bank Contact:</strong> 0422-3566580<br>
+                <strong>Email:</strong> support@lifelink.com
+              </p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p style="margin: 0 0 10px 0;">
+              <strong>LifeLink Blood Bank</strong><br>
+              Emergency Helpline: 📞 <strong>0422-3566580</strong><br>
+              Email: support@lifelink.com
+            </p>
+            <p style="margin: 0; font-size: 11px; color: #999;">
+              This email was sent to you because you are a registered blood donor with LifeLink Blood Bank.<br>
+              Please do not reply directly to this email. Contact the blood bank using the phone number above.
             </p>
           </div>
         </div>

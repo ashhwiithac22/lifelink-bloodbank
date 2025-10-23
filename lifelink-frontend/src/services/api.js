@@ -94,6 +94,9 @@ export const adminAPI = {
   updateRequestStatus: (id, status) => api.put(`/admin/requests/${id}/status`, { status }),
   notifyHospitals: (bloodGroup) => api.post('/admin/notify-hospitals', { bloodGroup }),
   getUrgentInventory: () => api.get('/admin/urgent-inventory'),
+
+  // NEW: Email sending endpoint for donors
+  sendEmailToDonor: (emailData) => api.post('/admin/send-email-to-donor', emailData),
 };
 
 // Donations API

@@ -1,7 +1,9 @@
 //frontend/src/pages/AdminPanel.js
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom'; // ADD THIS IMPORT
+import { Link } from 'react-router-dom';
 import { adminAPI, inventoryAPI, requestsAPI, donorsAPI, donationsAPI } from '../services/api';
+import ContactModal from '../components/ContactModal';
+import EmailModal from '../components/EmailModal';
 
 const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -17,6 +19,10 @@ const AdminPanel = () => {
     status: '',
     hospitalName: ''
   });
+
+  // NEW: Modal states
+  const [contactModal, setContactModal] = useState({ isOpen: false, donor: null });
+  const [emailModal, setEmailModal] = useState({ isOpen: false, donor: null });
 
   useEffect(() => {
     loadDashboardStats();
@@ -73,6 +79,23 @@ const AdminPanel = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // NEW: Contact Donor handler
+  const handleContactDonor = (donor) => {
+    setContactModal({ isOpen: true, donor });
+  };
+
+  // NEW: Send Email handler
+  const handleSendEmail = (donor) => {
+    setEmailModal({ isOpen: true, donor });
+  };
+
+  // NEW: Email sent callback
+  const handleEmailSent = () => {
+    // Refresh data or show notification
+    console.log('Email sent successfully');
+    // You can add toast notification here
   };
 
   const handleUpdateInventory = async (bloodGroup, unitsAvailable) => {
@@ -173,7 +196,6 @@ const AdminPanel = () => {
           >
             🩸 Inventory
           </button>
-          {/* FIXED: Link to new Manage Requests page */}
           <Link 
             to="/admin/manage-requests"
             className="tab-btn"
@@ -417,7 +439,7 @@ const AdminPanel = () => {
               </div>
             )}
 
-            {/* Donors Management */}
+            {/* Donors Management - UPDATED WITH NEW FUNCTIONALITY */}
             {activeTab === 'donors' && (
               <div className="donors-management">
                 <div className="section-header">
@@ -460,10 +482,18 @@ const AdminPanel = () => {
                         </div>
                       </div>
                       <div className="donor-actions">
-                        <button className="btn btn-outline btn-sm">
+                        {/* UPDATED: Working Contact Donor button */}
+                        <button 
+                          className="btn btn-outline btn-sm"
+                          onClick={() => handleContactDonor(donor)}
+                        >
                           📞 Contact Donor
                         </button>
-                        <button className="btn btn-outline btn-sm">
+                        {/* UPDATED: Working Send Email button */}
+                        <button 
+                          className="btn btn-outline btn-sm"
+                          onClick={() => handleSendEmail(donor)}
+                        >
                           📧 Send Email
                         </button>
                       </div>
@@ -514,6 +544,21 @@ const AdminPanel = () => {
             )}
           </div>
         )}
+
+        {/* NEW: Contact Modal */}
+        <ContactModal
+          donor={contactModal.donor}
+          isOpen={contactModal.isOpen}
+          onClose={() => setContactModal({ isOpen: false, donor: null })}
+        />
+
+        {/* NEW: Email Modal */}
+        <EmailModal
+          donor={emailModal.donor}
+          isOpen={emailModal.isOpen}
+          onClose={() => setEmailModal({ isOpen: false, donor: null })}
+          onEmailSent={handleEmailSent}
+        />
       </div>
     </div>
   );

@@ -3,7 +3,9 @@ const express = require('express');
 const User = require('../models/User');
 const Request = require('../models/Request');
 const Inventory = require('../models/Inventory');
+const EmailLog = require('../models/EmailLog'); // NEW
 const { auth } = require('../middleware/auth');
+const { sendEmail, emailTemplates } = require('../utils/emailService'); // UPDATED
 
 const router = express.Router();
 
@@ -32,7 +34,174 @@ router.get('/dashboard', auth, async (req, res) => {
   }
 });
 
-// NEW: Get all requests for admin with deduplication and auto-request tracking
+// NEW: Send email to donor endpoint
+router.post('/send-email-to-donor', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
+
+    const { donorId, subject, body } = req.body;
+
+    // Validate required fields
+    if (!donorId || !subject || !body) {
+      return res.status(400).json({ 
+        message: 'Donor ID, subject, and body are required' 
+      });
+    }
+
+    // Find donor
+    const donor = await User.findById(donorId);
+    if (!donor || donor.role !== 'donor') {
+      return res.status(404).json({ message: 'Donor not found' });
+    }
+
+    // Create email log entry
+    const emailLog = new EmailLog({
+      senderId: req.user._id,
+      senderName: req.user.name,
+      recipientDonorId: donor._id,
+      recipientEmail: donor.email,
+      recipientName: donor.name,
+      subject,
+      body,
+      status: 'pending'
+    });
+
+    await emailLog.save();
+
+    // Prepare email options
+    const emailOptions = {
+      from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
+      to: donor.email,
+      subject: subject,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px; }
+            .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #dc3545; padding-bottom: 20px; }
+            .content { line-height: 1.6; color: #333; }
+            .footer { text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+            .admin-info { background: #e7f3ff; padding: 15px; border-radius: 6px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="color: #dc3545; margin: 0;">LifeLink Blood Bank</h1>
+              <p style="color: #666; margin: 5px 0 0 0;">Saving Lives Together</p>
+            </div>
+
+            <div class="content">
+              <p>Dear <strong>${donor.name}</strong>,</p>
+              
+              ${body.replace(/\n/g, '<br>')}
+              
+              <div class="admin-info">
+                <p style="margin: 0;">
+                  <strong>Sent by:</strong> ${req.user.name} (Admin)<br>
+                  <strong>Blood Bank Contact:</strong> 0422-3566580<br>
+                  <strong>Email:</strong> support@lifelink.com
+                </p>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p style="margin: 0 0 10px 0;">
+                <strong>LifeLink Blood Bank</strong><br>
+                Emergency Helpline: 📞 <strong>0422-3566580</strong><br>
+                Email: support@lifelink.com
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #999;">
+                This email was sent to you because you are a registered blood donor with LifeLink Blood Bank.<br>
+                Please do not reply directly to this email. Contact the blood bank using the phone number above.
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `
+    };
+
+    // Send email
+    const emailResult = await sendEmail(emailOptions);
+
+    // Update email log with result
+    if (emailResult.success) {
+      emailLog.status = 'sent';
+      emailLog.messageId = emailResult.messageId;
+      emailLog.sentAt = new Date();
+    } else {
+      emailLog.status = 'failed';
+      emailLog.error = emailResult.error;
+    }
+
+    await emailLog.save();
+
+    if (emailResult.success) {
+      res.json({ 
+        success: true, 
+        message: 'Email sent successfully',
+        logId: emailLog._id,
+        messageId: emailResult.messageId
+      });
+    } else {
+      res.status(500).json({ 
+        success: false,
+        message: 'Failed to send email',
+        error: emailResult.error,
+        logId: emailLog._id
+      });
+    }
+
+  } catch (error) {
+    console.error('Error sending email to donor:', error);
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: error.message 
+    });
+  }
+});
+
+// NEW: Get email logs for admin
+router.get('/email-logs', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const emailLogs = await EmailLog.find()
+      .populate('senderId', 'name email')
+      .populate('recipientDonorId', 'name bloodGroup')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await EmailLog.countDocuments();
+
+    res.json({
+      emailLogs,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Existing routes remain the same...
 router.get('/requests', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -106,7 +275,6 @@ router.get('/requests', auth, async (req, res) => {
   }
 });
 
-// NEW: Update request status
 router.put('/requests/:id/status', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -137,7 +305,6 @@ router.put('/requests/:id/status', auth, async (req, res) => {
   }
 });
 
-// NEW: Notify hospitals about low inventory
 router.post('/notify-hospitals', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -184,7 +351,6 @@ router.post('/notify-hospitals', auth, async (req, res) => {
   }
 });
 
-// NEW: Get urgent inventory (blood groups with ≤ 3 units)
 router.get('/urgent-inventory', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -202,7 +368,6 @@ router.get('/urgent-inventory', auth, async (req, res) => {
   }
 });
 
-// Get all users
 router.get('/users', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -216,7 +381,6 @@ router.get('/users', auth, async (req, res) => {
   }
 });
 
-// Delete user
 router.delete('/users/:id', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
