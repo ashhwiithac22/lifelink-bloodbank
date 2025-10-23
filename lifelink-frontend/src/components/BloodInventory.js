@@ -1,3 +1,4 @@
+//src/components/BloodInventory.js
 import React, { useState, useEffect } from 'react';
 import { inventoryAPI } from '../services/api';
 
