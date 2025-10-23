@@ -1,3 +1,4 @@
+//src/services/api.js
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -61,15 +62,12 @@ export const donorsAPI = {
   getById: (id) => api.get(`/donors/${id}`),
 };
 
-// Requests API - ENHANCED WITH DUPLICATE PREVENTION
+// Requests API
 export const requestsAPI = {
   create: (requestData) => api.post('/requests', requestData),
   sendToDonor: (requestData) => api.post('/requests/send-to-donor', requestData),
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
-  
-  // NEW: Get unique email requests (no duplicates)
   getUniqueEmailRequests: () => api.get('/requests/hospital/unique-email-requests'),
-  
   getAdminAll: (filters = {}) => api.get('/requests/admin/all', { params: filters }),
   updateStatus: (id, status) => api.put(`/requests/${id}`, { status }),
   getStats: () => api.get('/requests/stats'),
@@ -85,11 +83,17 @@ export const inventoryAPI = {
   adjust: (data) => api.put('/inventory/adjust', data),
 };
 
-// Admin API
+// Admin API - ENHANCED WITH NEW ENDPOINTS
 export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getUsers: () => api.get('/admin/users'),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
+  
+  // NEW: Admin request management endpoints
+  getRequests: () => api.get('/admin/requests'),
+  updateRequestStatus: (id, status) => api.put(`/admin/requests/${id}/status`, { status }),
+  notifyHospitals: (bloodGroup) => api.post('/admin/notify-hospitals', { bloodGroup }),
+  getUrgentInventory: () => api.get('/admin/urgent-inventory'),
 };
 
 // Donations API

@@ -1,5 +1,6 @@
 //frontend/src/pages/AdminPanel.js
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom'; // ADD THIS IMPORT
 import { adminAPI, inventoryAPI, requestsAPI, donorsAPI, donationsAPI } from '../services/api';
 
 const AdminPanel = () => {
@@ -172,12 +173,14 @@ const AdminPanel = () => {
           >
             🩸 Inventory
           </button>
-          <button 
-            className={`tab-btn ${activeTab === 'requests' ? 'active' : ''}`}
-            onClick={() => setActiveTab('requests')}
+          {/* FIXED: Link to new Manage Requests page */}
+          <Link 
+            to="/admin/manage-requests"
+            className="tab-btn"
+            style={{ textDecoration: 'none', display: 'inline-block' }}
           >
-            📋 Requests ({stats.pendingRequests || 0})
-          </button>
+            📋 Manage Requests ({stats.pendingRequests || 0})
+          </Link>
           <button 
             className={`tab-btn ${activeTab === 'donors' ? 'active' : ''}`}
             onClick={() => setActiveTab('donors')}
@@ -401,131 +404,15 @@ const AdminPanel = () => {
               </div>
             )}
 
-            {/* Requests Management */}
+            {/* Requests Management - REMOVED since we have dedicated page */}
             {activeTab === 'requests' && (
-              <div className="requests-management">
-                <div className="section-header">
-                  <h2>Blood Request Management</h2>
-                  <p>Approve, reject, and manage blood requests from hospitals</p>
-                </div>
-
-                <div className="search-filters">
-                  <div className="filter-group">
-                    <label>Blood Group</label>
-                    <select name="bloodGroup" value={searchFilters.bloodGroup} onChange={handleSearchChange}>
-                      <option value="">All Blood Groups</option>
-                      <option value="A+">A+</option>
-                      <option value="A-">A-</option>
-                      <option value="B+">B+</option>
-                      <option value="B-">B-</option>
-                      <option value="AB+">AB+</option>
-                      <option value="AB-">AB-</option>
-                      <option value="O+">O+</option>
-                      <option value="O-">O-</option>
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label>Status</label>
-                    <select name="status" value={searchFilters.status} onChange={handleSearchChange}>
-                      <option value="">All Status</option>
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approved</option>
-                      <option value="rejected">Rejected</option>
-                      <option value="fulfilled">Fulfilled</option>
-                    </select>
-                  </div>
-                  <div className="filter-group">
-                    <label>Hospital</label>
-                    <input
-                      type="text"
-                      name="hospitalName"
-                      value={searchFilters.hospitalName}
-                      onChange={handleSearchChange}
-                      placeholder="Search hospital..."
-                    />
-                  </div>
-                </div>
-
-                <div className="requests-grid">
-                  {requests.map(request => (
-                    <div key={request._id} className="request-card">
-                      <div className="request-header">
-                        <h4>{request.hospitalName}</h4>
-                        <div className="request-meta">
-                          <span className={`status-badge ${request.status}`}>
-                            {request.status}
-                          </span>
-                          <span className={`urgency-badge ${request.urgency}`}>
-                            {request.urgency} urgency
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="request-details">
-                        <div className="detail-item">
-                          <strong>Blood Group:</strong>
-                          <span className="blood-type">{request.bloodGroup}</span>
-                        </div>
-                        <div className="detail-item">
-                          <strong>Units Required:</strong>
-                          <span>{request.unitsRequired}</span>
-                        </div>
-                        <div className="detail-item">
-                          <strong>City:</strong>
-                          <span>{request.city}</span>
-                        </div>
-                        <div className="detail-item">
-                          <strong>Contact:</strong>
-                          <span>{request.contactPerson} ({request.contactNumber})</span>
-                        </div>
-                        <div className="detail-item">
-                          <strong>Purpose:</strong>
-                          <span>{request.purpose}</span>
-                        </div>
-                        <div className="detail-item">
-                          <strong>Requested:</strong>
-                          <span>{new Date(request.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-
-                      <div className="request-actions">
-                        {request.status === 'pending' && (
-                          <>
-                            <button 
-                              onClick={() => handleUpdateRequestStatus(request._id, 'approved')}
-                              className="btn btn-success"
-                            >
-                              ✅ Approve Request
-                            </button>
-                            <button 
-                              onClick={() => handleUpdateRequestStatus(request._id, 'rejected')}
-                              className="btn btn-danger"
-                            >
-                              ❌ Reject Request
-                            </button>
-                          </>
-                        )}
-                        {request.status === 'approved' && (
-                          <button 
-                            onClick={() => handleUpdateRequestStatus(request._id, 'fulfilled')}
-                            className="btn btn-info"
-                          >
-                            ✅ Mark as Fulfilled
-                          </button>
-                        )}
-                        {(request.status === 'rejected' || request.status === 'fulfilled') && (
-                          <span className="action-complete">
-                            Request {request.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {requests.length === 0 && (
-                    <div className="empty-state">
-                      <p>No requests found matching your criteria.</p>
-                    </div>
-                  )}
+              <div className="redirect-notice">
+                <div className="notice-content">
+                  <h2>📋 Manage Requests</h2>
+                  <p>Blood request management has been moved to a dedicated page for better organization and real-time updates.</p>
+                  <Link to="/admin/manage-requests" className="btn btn-primary">
+                    🚀 Go to Manage Requests
+                  </Link>
                 </div>
               </div>
             )}

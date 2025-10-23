@@ -1,3 +1,4 @@
+//frontend/src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -10,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import DonorSearch from './pages/DonorSearch';
 import HospitalRequests from './pages/HospitalRequests';
 import AdminPanel from './pages/AdminPanel';
+import AdminManageRequests from './pages/AdminManageRequests'; // NEW
 import Donations from './pages/Donations';
 import HelpRestock from './pages/HelpRestock';
 import About from './pages/About';
@@ -87,6 +89,16 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['hospital', 'admin']}>
                     <HospitalRequests />
+                  </ProtectedRoute>
+                } 
+              />
+              
+              {/* NEW: Admin Manage Requests Route */}
+              <Route 
+                path="/admin/manage-requests" 
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminManageRequests />
                   </ProtectedRoute>
                 } 
               />

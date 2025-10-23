@@ -1,3 +1,4 @@
+//src/pages/Dashboard.js
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,11 +24,24 @@ const Dashboard = () => {
     const interval = setInterval(() => {
       if (user?.role === 'hospital') {
         loadRecentRequests();
+      } else if (user?.role === 'admin') {
+        loadAdminRecentRequests();
       }
     }, 30000);
 
     return () => clearInterval(interval);
   }, [user]);
+
+  const loadAdminRecentRequests = async () => {
+    try {
+      const response = await adminAPI.getRequests();
+      const requests = response.data || [];
+      setRecentRequests(requests.slice(0, 5));
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Error polling for admin requests:', error);
+    }
+  };
 
   const loadRecentRequests = async () => {
     try {
@@ -71,14 +85,14 @@ const Dashboard = () => {
       if (user?.role === 'admin') {
         const [dashboardResponse, requestsResponse, donorsResponse, donationsResponse, inventoryResponse] = await Promise.all([
           adminAPI.getDashboard(),
-          requestsAPI.getAll({ status: 'pending' }),
+          adminAPI.getRequests(), // CHANGED: Use admin API for requests
           donorsAPI.getAll({ availability: true }),
           donationsAPI.getStats(),
           inventoryAPI.getAll()
         ]);
         
         setStats(dashboardResponse.data);
-        setRecentRequests(requestsResponse.data.slice(0, 6));
+        setRecentRequests(requestsResponse.data.slice(0, 5)); // Show only 5 recent
         setRecentDonors(donorsResponse.data.slice(0, 6));
         setRecentDonations(donationsResponse.data.donationsByBloodGroup || []);
         calculateInventoryStats(inventoryResponse.data);
@@ -136,6 +150,14 @@ const Dashboard = () => {
           emailsSent: 0
         });
         setRecentRequests([]);
+      } else if (user?.role === 'admin') {
+        setStats({ 
+          totalDonors: 0,
+          totalHospitals: 0,
+          totalRequests: 0,
+          pendingRequests: 0
+        });
+        setRecentRequests([]);
       }
     } finally {
       setLoading(false);
@@ -185,6 +207,19 @@ const Dashboard = () => {
       high: 'urgency-high'
     };
     return <span className={`urgency-badge ${urgencyClasses[urgency]}`}>{urgency}</span>;
+  };
+
+  // NEW: Format request info for admin display
+  const formatAdminRequestInfo = (request) => {
+    if (request.isAuto) {
+      return '🤖 Auto-generated • Low inventory alert';
+    }
+    
+    if (request.donorName) {
+      return `To: ${request.donorName} • ${request.donorEmail}`;
+    }
+    
+    return 'System request';
   };
 
   const formatDonorInfo = (request) => {
@@ -333,7 +368,8 @@ const Dashboard = () => {
                         <p>View all system users</p>
                       </div>
                     </Link>
-                    <Link to="/requests" className="action-card">
+                    {/* FIXED: Link to new Manage Requests page */}
+                    <Link to="/admin/manage-requests" className="action-card">
                       <div className="action-icon">📋</div>
                       <div className="action-content">
                         <h3>Manage Requests</h3>
@@ -465,41 +501,55 @@ const Dashboard = () => {
 
           {/* Right Column */}
           <div className="dashboard-column">
-            {/* Recent Email Requests */}
+            {/* Recent Requests - DIFFERENT VIEW FOR ADMIN */}
             {(user?.role === 'admin' || user?.role === 'hospital') && (
               <div className="activity-card">
                 <div className="card-header">
                   <div className="header-title">
-                    <h2>📧 My Email Requests</h2>
+                    <h2>
+                      {user?.role === 'admin' ? '📋 System Requests' : '📧 My Email Requests'}
+                    </h2>
                     <span className="live-badge">AUTO-UPDATE</span>
                   </div>
                   <div className="header-actions">
                     <span className="last-update">
                       Updated: {lastUpdate.toLocaleTimeString()}
                     </span>
-                    <Link to="/requests" className="view-all">View All →</Link>
+                    <Link to={user?.role === 'admin' ? "/admin/manage-requests" : "/requests"} className="view-all">
+                      View All →
+                    </Link>
                   </div>
                 </div>
                 <div className="activity-list">
                   {recentRequests.length > 0 ? (
                     recentRequests.map(request => (
                       <div key={request._id} className="activity-item">
-                        <div className="activity-icon">📧</div>
+                        <div className="activity-icon">
+                          {request.isAuto ? '🤖' : '📋'}
+                        </div>
                         <div className="activity-content">
-                          <h4>Blood Request</h4>
+                          <h4>
+                            {request.isAuto ? 'Low Inventory Alert' : 'Blood Request'}
+                            {request.hasDuplicates && <span title="Has duplicates"> ⚠️</span>}
+                          </h4>
                           <p>
                             <span className="blood-type">{request.bloodGroup}</span> • 
                             {request.unitsRequired} unit{request.unitsRequired !== 1 ? 's' : ''} • 
                             {getUrgencyBadge(request.urgency)}
                           </p>
-                          <p className="donor-info">
-                            To: <strong>{getDonorNames(request)}</strong>
+                          <p className="request-info">
+                            {user?.role === 'admin' 
+                              ? formatAdminRequestInfo(request)
+                              : `To: ${getDonorNames(request)}`
+                            }
                           </p>
-                          <p className="email-status">
-                            {formatDonorInfo(request)}
-                          </p>
+                          {user?.role === 'hospital' && (
+                            <p className="email-status">
+                              {formatDonorInfo(request)}
+                            </p>
+                          )}
                           <span className="activity-time">
-                            Sent {new Date(request.createdAt).toLocaleDateString()} at {new Date(request.createdAt).toLocaleTimeString()}
+                            {request.isAuto ? 'Generated' : 'Sent'} {new Date(request.createdAt).toLocaleDateString()} at {new Date(request.createdAt).toLocaleTimeString()}
                           </span>
                         </div>
                         <div className="activity-status">
@@ -509,11 +559,14 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <div className="empty-state">
-                      <p>No email requests sent yet</p>
+                      <p>No requests found</p>
                       {user?.role === 'hospital' && (
                         <Link to="/blood-request" className="btn btn-primary btn-sm">
                           Send Your First Request
                         </Link>
+                      )}
+                      {user?.role === 'admin' && (
+                        <p className="small">Auto-requests appear when inventory is low</p>
                       )}
                     </div>
                   )}
