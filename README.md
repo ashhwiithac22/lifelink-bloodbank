@@ -1,4 +1,4 @@
-# 🩸 LifeLink – Blood Bank Management System
+# 🩸 LifeLink – Blood Bank Management System, A MERN Stack WebApp
 
 A **full-stack MERN (MongoDB, Express, React, Node.js)** web application designed to streamline the **blood donation and management process** between **donors, hospitals, and administrators**.  
 This project enables hospitals to request blood, donors to contribute, and admins to manage the overall blood bank system efficiently.
