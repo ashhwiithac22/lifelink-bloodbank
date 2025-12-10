@@ -1,20 +1,39 @@
-//backend/utils/emailService.js
 const nodemailer = require('nodemailer');
 
-// Create transporter with correct syntax
+// Create transporter with enhanced configuration
 const createTransporter = () => {
   return nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    requireTLS: true,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
-    }
+    },
+    tls: {
+      ciphers: 'SSLv3'
+    },
+    debug: true // Enable debugging
   });
 };
 
-// Enhanced email templates with better error handling
+// Verify transporter connection
+const verifyTransporter = async () => {
+  try {
+    const transporter = createTransporter();
+    await transporter.verify();
+    console.log('✅ SMTP connection verified successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ SMTP connection failed:', error.message);
+    return false;
+  }
+};
+
+// Enhanced email templates
 const emailTemplates = {
-  // Donor Blood Request Email - ENHANCED
+  // Donor Blood Request Email
   donorBloodRequest: (request, donor, hospital, hospitalContact) => ({
     from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: donor.email,
@@ -29,111 +48,30 @@ const emailTemplates = {
           .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
           .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #dc3545; padding-bottom: 20px; }
           .urgent-alert { background: #fff5f5; padding: 20px; border-radius: 8px; border-left: 4px solid #dc3545; margin-bottom: 25px; }
-          .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
-          .cta-section { background: #e7f3ff; padding: 20px; border-radius: 8px; text-align: center; margin: 25px 0; }
-          .footer { text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-          .contact-highlight { background: #fff3cd; padding: 15px; border-radius: 6px; margin: 15px 0; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1 style="color: #dc3545; margin: 0;">LifeLink Blood Bank</h1>
-            <p style="color: #666; margin: 5px 0 0 0;">Saving Lives Together</p>
           </div>
-
           <div class="urgent-alert">
             <h2 style="color: #dc3545; margin: 0 0 15px 0;">Urgent Blood Request</h2>
-            <p style="margin: 0; color: #333; font-size: 16px;">
-              Dear <strong>${donor.name}</strong>,
-            </p>
-            <p style="margin: 15px 0; color: #333;">
-              <strong>${hospital.hospitalName}</strong> urgently needs <strong>${request.bloodGroup}</strong> blood donation.
-            </p>
+            <p>Dear ${donor.name},</p>
+            <p><strong>${hospital.hospitalName}</strong> urgently needs <strong>${request.bloodGroup}</strong> blood.</p>
+            <p><strong>Contact:</strong> ${request.contactPerson} - ${request.contactNumber}</p>
           </div>
-
-          <div class="contact-highlight">
-            <h3 style="margin: 0 0 10px 0; color: #856404;">📞 Immediate Contact Information</h3>
-            <p style="margin: 5px 0; font-size: 16px;">
-              <strong>Hospital:</strong> ${hospital.hospitalName}<br>
-              <strong>Contact Person:</strong> ${request.contactPerson}<br>
-              <strong>Phone:</strong> <a href="tel:${request.contactNumber}" style="color: #007bff; text-decoration: none; font-weight: bold;">${request.contactNumber}</a><br>
-              <strong>Your Contact:</strong> ${donor.contact} | ${donor.email}
-            </p>
-          </div>
-
-          <h3 style="color: #333; margin: 0 0 15px 0;">📋 Request Details</h3>
-          <table class="details-table">
-            <tr>
-              <td style="color: #666; width: 40%;"><strong>Blood Group Needed:</strong></td>
-              <td style="color: #333;">
-                <span style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold;">
-                  ${request.bloodGroup}
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="color: #666;"><strong>Units Required:</strong></td>
-              <td style="color: #333;">${request.unitsRequired} unit(s)</td>
-            </tr>
-            <tr>
-              <td style="color: #666;"><strong>Urgency Level:</strong></td>
-              <td style="color: #333;">
-                <span style="color: ${
-                  request.urgency === 'high' ? '#dc3545' : 
-                  request.urgency === 'medium' ? '#ff9800' : '#4caf50'
-                }; font-weight: bold; text-transform: capitalize;">
-                  ${request.urgency} priority
-                </span>
-              </td>
-            </tr>
-            <tr>
-              <td style="color: #666;"><strong>Purpose:</strong></td>
-              <td style="color: #333;">${request.purpose}</td>
-            </tr>
-            <tr>
-              <td style="color: #666;"><strong>Request Date:</strong></td>
-              <td style="color: #333;">${new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td>
-            </tr>
-          </table>
-
-          <div class="cta-section">
-            <h3 style="color: #0056b3; margin: 0 0 15px 0;">💪 You Can Save Lives!</h3>
-            <p style="margin: 0 0 20px 0; color: #333; font-size: 16px;">
-              Your ${donor.bloodGroup} blood is urgently needed. Please contact the hospital immediately if you can help.
-            </p>
-            <div style="margin: 20px 0;">
-              <a href="tel:${request.contactNumber}" style="display: inline-block; background: #dc3545; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin: 5px;">
-                📞 Call Hospital Now
-              </a>
-              <a href="mailto:${hospitalContact}" style="display: inline-block; background: #007bff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin: 5px;">
-                📧 Email Response
-              </a>
-            </div>
-            <p style="margin: 15px 0 0 0; color: #666; font-size: 14px;">
-              ⚠️ Each donation can save up to 3 lives!
-            </p>
-          </div>
-
           <div class="footer">
-            <p style="margin: 0 0 10px 0;">
-              <strong>LifeLink Blood Bank</strong><br>
-              Emergency Helpline: 📞 <strong>0422-3566580</strong><br>
-              Email: support@lifelink.com
-            </p>
-            <p style="margin: 0; font-size: 11px; color: #999;">
-              This is an automated message. Please do not reply directly to this email.<br>
-              Contact the hospital directly using the phone number provided above.
-            </p>
+            <p>LifeLink Blood Bank<br>Emergency Helpline: 0422-3566580</p>
           </div>
         </div>
       </body>
       </html>
-    `
+    `,
+    text: `Urgent Blood Request\n\nDear ${donor.name},\n\n${hospital.hospitalName} urgently needs ${request.bloodGroup} blood.\n\nContact: ${request.contactPerson} - ${request.contactNumber}\n\nLifeLink Blood Bank\nEmergency Helpline: 0422-3566580`
   }),
 
-  // NEW: Admin to Donor Email Template
+  // Admin to Donor Email
   adminToDonor: (admin, donor, subject, body) => ({
     from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: donor.email,
@@ -141,117 +79,46 @@ const emailTemplates = {
     html: `
       <!DOCTYPE html>
       <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f8f9fa; padding: 20px; }
-          .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #dc3545; padding-bottom: 20px; }
-          .content { line-height: 1.6; color: #333; white-space: pre-line; }
-          .footer { text-align: center; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
-          .admin-info { background: #e7f3ff; padding: 15px; border-radius: 6px; margin: 20px 0; }
-        </style>
-      </head>
       <body>
-        <div class="container">
-          <div class="header">
-            <h1 style="color: #dc3545; margin: 0;">LifeLink Blood Bank</h1>
-            <p style="color: #666; margin: 5px 0 0 0;">Saving Lives Together</p>
-          </div>
-
-          <div class="content">
-            <p>Dear <strong>${donor.name}</strong>,</p>
-            
-            ${body.replace(/\n/g, '<br>')}
-            
-            <div class="admin-info">
-              <p style="margin: 0;">
-                <strong>Sent by:</strong> ${admin.name} (Admin)<br>
-                <strong>Blood Bank Contact:</strong> 0422-3566580<br>
-                <strong>Email:</strong> support@lifelink.com
-              </p>
-            </div>
-          </div>
-
-          <div class="footer">
-            <p style="margin: 0 0 10px 0;">
-              <strong>LifeLink Blood Bank</strong><br>
-              Emergency Helpline: 📞 <strong>0422-3566580</strong><br>
-              Email: support@lifelink.com
-            </p>
-            <p style="margin: 0; font-size: 11px; color: #999;">
-              This email was sent to you because you are a registered blood donor with LifeLink Blood Bank.<br>
-              Please do not reply directly to this email. Contact the blood bank using the phone number above.
-            </p>
-          </div>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc3545;">LifeLink Blood Bank</h2>
+          <p>Dear ${donor.name},</p>
+          <p>${body.replace(/\n/g, '<br>')}</p>
+          <hr>
+          <p>Sent by: ${admin.name}<br>Blood Bank: 0422-3566580</p>
         </div>
       </body>
       </html>
-    `
+    `,
+    text: `Dear ${donor.name},\n\n${body}\n\nSent by: ${admin.name}\nBlood Bank: 0422-3566580`
   }),
 
   requestApproved: (request, hospitalEmail) => ({
     from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: hospitalEmail,
     subject: `✅ Blood Request Approved - ${request.bloodGroup}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2ecc71;">Blood Request Approved!</h2>
-        <p>Dear Hospital Administrator,</p>
-        
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-          <h3>Request Details:</h3>
-          <p><strong>Blood Group:</strong> ${request.bloodGroup}</p>
-          <p><strong>Units Approved:</strong> ${request.unitsRequired}</p>
-          <p><strong>Request ID:</strong> ${request._id}</p>
-          <p><strong>Approval Date:</strong> ${new Date().toLocaleDateString()}</p>
-        </div>
-
-        <p>The blood units have been reserved for your hospital. Please coordinate with the blood bank for collection.</p>
-        
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-          <p><strong>LifeLink Blood Bank</strong><br>
-          Emergency Contact: 0422-3566580</p>
-        </div>
-      </div>
-    `
+    text: `Your blood request for ${request.bloodGroup} has been approved.\n\nRequest ID: ${request._id}\nUnits: ${request.unitsRequired}\n\nLifeLink Blood Bank\n0422-3566580`
   }),
 
   requestRejected: (request, hospitalEmail) => ({
     from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: hospitalEmail,
     subject: `❌ Blood Request Update - ${request.bloodGroup}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #e74c3c;">Blood Request Update</h2>
-        <p>Dear Hospital Administrator,</p>
-        
-        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-          <h3>Request Details:</h3>
-          <p><strong>Blood Group:</strong> ${request.bloodGroup}</p>
-          <p><strong>Units Requested:</strong> ${request.unitsRequired}</p>
-          <p><strong>Request ID:</strong> ${request._id}</p>
-          <p><strong>Status:</strong> Rejected</p>
-        </div>
-
-        <p>Unfortunately, we are unable to fulfill your blood request at this time due to insufficient inventory.</p>
-        <p>Please try again later or contact our emergency helpline for urgent requirements.</p>
-        
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
-          <p><strong>LifeLink Blood Bank</strong><br>
-          Emergency Contact: 0422-3566580</p>
-        </div>
-      </div>
-    `
+    text: `Your blood request for ${request.bloodGroup} has been rejected due to insufficient inventory.\n\nPlease try again later.\n\nLifeLink Blood Bank\n0422-3566580`
   })
 };
 
-// Enhanced send email function with better error handling
+// Enhanced send email function with detailed logging
 const sendEmail = async (emailOptions) => {
   try {
-    // Check if email credentials are configured
+    console.log('\n📧 ======= EMAIL SENDING ATTEMPT =======');
+    console.log('To:', emailOptions.to);
+    console.log('Subject:', emailOptions.subject);
+    console.log('From:', process.env.EMAIL_USER);
+
+    // Check if email credentials exist
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.log('📧 Email credentials not configured. Skipping email send.');
+      console.log('❌ EMAIL CREDENTIALS MISSING');
       return { 
         success: false, 
         error: 'Email credentials not configured',
@@ -259,17 +126,31 @@ const sendEmail = async (emailOptions) => {
       };
     }
 
-    console.log(`📧 Attempting to send email to: ${emailOptions.to}`);
-    console.log(`📧 Email subject: ${emailOptions.subject}`);
+    // Test SMTP connection first
+    const isVerified = await verifyTransporter();
+    if (!isVerified) {
+      return {
+        success: false,
+        error: 'SMTP connection failed'
+      };
+    }
 
     const transporter = createTransporter();
     
-    // Send email
+    // Add fallback text content if not provided
+    if (!emailOptions.text && emailOptions.html) {
+      // Create simple text from HTML
+      emailOptions.text = emailOptions.html
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
     const info = await transporter.sendMail(emailOptions);
     
-    console.log('✅ Email sent successfully!');
-    console.log(`✅ Message ID: ${info.messageId}`);
-    console.log(`✅ To: ${emailOptions.to}`);
+    console.log('✅ EMAIL SENT SUCCESSFULLY');
+    console.log('Message ID:', info.messageId);
+    console.log('================================\n');
     
     return { 
       success: true, 
@@ -278,45 +159,74 @@ const sendEmail = async (emailOptions) => {
     };
     
   } catch (error) {
-    console.error('❌ Email sending failed:', error);
-    
-    // Provide more specific error messages
-    let errorMessage = 'Email sending failed';
-    
-    if (error.code === 'EAUTH') {
-      errorMessage = 'Email authentication failed. Check your email credentials.';
-    } else if (error.code === 'EENVELOPE') {
-      errorMessage = 'Invalid email address or envelope configuration.';
-    } else if (error.code === 'ECONNECTION') {
-      errorMessage = 'Could not connect to email server. Check your internet connection.';
-    } else {
-      errorMessage = error.message;
-    }
+    console.error('\n❌ EMAIL SENDING FAILED:', error.message);
+    console.error('Error Code:', error.code);
+    console.error('Stack:', error.stack);
+    console.log('================================\n');
     
     return { 
       success: false, 
-      error: errorMessage,
+      error: error.message,
+      code: error.code,
       details: error 
     };
   }
 };
 
 // Test email configuration
-const testEmailConfig = async () => {
-  console.log('🧪 Testing email configuration...');
+const testEmailConfig = async (testEmail = null) => {
+  console.log('\n🧪 ======= EMAIL CONFIGURATION TEST =======');
   
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log('❌ Email credentials not found in environment variables');
+    console.log('❌ CREDENTIALS NOT FOUND IN .env');
+    console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+    console.log('EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
+    console.log('================================\n');
     return false;
   }
   
+  console.log('Email User:', process.env.EMAIL_USER);
+  console.log('Email Pass Length:', process.env.EMAIL_PASS.length);
+  
   try {
+    // Test SMTP connection
     const transporter = createTransporter();
     await transporter.verify();
-    console.log('✅ Email configuration test passed');
+    console.log('✅ SMTP CONNECTION VERIFIED');
+    
+    // Send test email if email provided
+    if (testEmail) {
+      console.log('Sending test email to:', testEmail);
+      
+      const testResult = await sendEmail({
+        from: `"LifeLink Test" <${process.env.EMAIL_USER}>`,
+        to: testEmail,
+        subject: '✅ LifeLink Email Test - SUCCESS',
+        text: 'Congratulations! Your LifeLink email system is working correctly.',
+        html: '<h2>✅ Email Test Successful!</h2><p>Your LifeLink email system is working correctly.</p>'
+      });
+      
+      console.log('Test Email Result:', testResult.success ? '✅ Sent' : '❌ Failed');
+    }
+    
+    console.log('✅ EMAIL CONFIGURATION TEST PASSED');
+    console.log('================================\n');
     return true;
+    
   } catch (error) {
-    console.error('❌ Email configuration test failed:', error.message);
+    console.error('❌ EMAIL CONFIGURATION TEST FAILED');
+    console.error('Error:', error.message);
+    
+    // Specific error handling
+    if (error.code === 'EAUTH') {
+      console.log('\n🔧 AUTHENTICATION ERROR SOLUTIONS:');
+      console.log('1. Use Gmail App Password (not your regular password)');
+      console.log('2. Enable 2-Step Verification on Google');
+      console.log('3. Generate App Password: https://myaccount.google.com/apppasswords');
+      console.log('4. Make sure EMAIL_PASS is 16 characters, no spaces');
+    }
+    
+    console.log('================================\n');
     return false;
   }
 };
@@ -324,5 +234,6 @@ const testEmailConfig = async () => {
 module.exports = { 
   emailTemplates, 
   sendEmail, 
-  testEmailConfig
+  testEmailConfig,
+  verifyTransporter
 };
