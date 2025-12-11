@@ -1,4 +1,3 @@
-//lifelink-backend/middleware/auth.js
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
@@ -10,16 +9,26 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'No token, authorization denied' });
     }
 
+    // FIX: Verify token and handle both id and _id
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'lifelink_secret');
-    const user = await User.findById(decoded.id).select('-password');
+    
+    // Try id first, then _id as fallback
+    const userId = decoded.id || decoded._id;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Invalid token structure' });
+    }
+
+    const user = await User.findById(userId).select('-password');
     
     if (!user) {
-      return res.status(401).json({ message: 'Token is not valid' });
+      return res.status(401).json({ message: 'User not found' });
     }
 
     req.user = user;
     next();
   } catch (error) {
+    console.error('Auth middleware error:', error.message);
     res.status(401).json({ message: 'Token is not valid' });
   }
 };
@@ -27,10 +36,13 @@ const auth = async (req, res, next) => {
 const adminAuth = async (req, res, next) => {
   try {
     await auth(req, res, () => {});
-    if (req.user.role !== 'admin') {
+    
+    // Check if user is admin
+    if (req.user && req.user.role === 'admin') {
+      next();
+    } else {
       return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
-    next();
   } catch (error) {
     res.status(401).json({ message: 'Authentication failed' });
   }

@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { donorsAPI, requestsAPI, adminAPI, inventoryAPI, donationsAPI } from '../services/api';
 import BloodInventory from '../components/BloodInventory';
+// Use inventoryAPI.getAll() which now handles both formats
+const inventoryResponse = await inventoryAPI.getAll();
+const inventoryData = inventoryResponse.data || [];
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -31,16 +34,39 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [user]);
 
-  const loadAdminRecentRequests = async () => {
-    try {
-      const response = await adminAPI.getRequests ? await adminAPI.getRequests() : await requestsAPI.getAll();
-      const requests = response.data || [];
-      setRecentRequests(requests.slice(0, 5));
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Error polling for admin requests:', error);
+ // In the loadAdminRecentRequests function, update it:
+
+const loadAdminRecentRequests = async () => {
+  try {
+    const response = await adminAPI.getRequests ? await adminAPI.getRequests() : await requestsAPI.getAll();
+    
+    // FIX: Handle non-array responses
+    const requests = Array.isArray(response.data) ? response.data : [];
+    setRecentRequests(requests.slice(0, 5));
+    setLastUpdate(new Date());
+  } catch (error) {
+    console.error('Error polling for admin requests:', error);
+    
+    // Don't clear requests on error, just log it
+    if (error.response?.status === 403) {
+      console.log('Admin access denied. User may not be logged in as admin.');
     }
-  };
+  }
+};
+
+// Also update the useEffect to check if user is admin before polling
+useEffect(() => {
+  loadDashboardData();
+  
+  // Set up polling only if user is admin
+  if (user?.role === 'admin') {
+    const interval = setInterval(() => {
+      loadAdminRecentRequests();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }
+}, [user]); // Add user as dependency
 
   const loadRecentRequests = async () => {
     try {

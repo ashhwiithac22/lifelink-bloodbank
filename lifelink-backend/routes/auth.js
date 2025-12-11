@@ -1,4 +1,3 @@
-//routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -7,15 +6,20 @@ const Inventory = require('../models/Inventory');
 
 const router = express.Router();
 
-// Generate JWT Token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d',
-  });
+// FIXED: Generate JWT Token with consistent id field
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user._id,  // ← CRITICAL FIX: Use id field consistently
+      _id: user._id, // ← Also include _id for backward compatibility
+      role: user.role 
+    }, 
+    process.env.JWT_SECRET, 
+    { expiresIn: '30d' }
+  );
 };
 
 // Register user
-// routes/auth.js - Update the register route
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role, bloodGroup, age, city, contact, hospitalName } = req.body;
@@ -41,9 +45,6 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // For admin role, no additional fields are required
-    // You can add admin-specific validation here if needed
-
     // Create user
     const user = await User.create({
       name,
@@ -55,7 +56,7 @@ router.post('/register', async (req, res) => {
       city,
       contact,
       hospitalName: role === 'hospital' ? hospitalName : undefined,
-      availability: role === 'donor' // Default availability for donors
+      availability: role === 'donor'
     });
 
     console.log('User created successfully:', user.email, 'Role:', user.role);
@@ -70,7 +71,7 @@ router.post('/register', async (req, res) => {
         city: user.city,
         hospitalName: user.hospitalName,
         availability: user.availability,
-        token: generateToken(user._id),
+        token: generateToken(user), // ← Use fixed token generation
       });
     }
   } catch (error) {
@@ -95,7 +96,7 @@ router.post('/login', async (req, res) => {
         bloodGroup: user.bloodGroup,
         city: user.city,
         hospitalName: user.hospitalName,
-        token: generateToken(user._id),
+        token: generateToken(user), // ← Use fixed token generation
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -115,7 +116,15 @@ router.get('/me', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
+    
+    // Try id first, then _id as fallback
+    const userId = decoded.id || decoded._id;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Invalid token structure' });
+    }
+    
+    const user = await User.findById(userId).select('-password');
     
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
@@ -127,5 +136,4 @@ router.get('/me', async (req, res) => {
   }
 });
 
-// ✅ MUST HAVE THIS LINE:
 module.exports = router;
