@@ -14,7 +14,7 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
   API_URL = 'http://localhost:5000/api';
   console.log('🌍 Detected: Local development environment');
 } else {
-  // Production (Vercel/Render)
+  // Production (Render)
   API_URL = 'https://lifelink-bloodbank-4gxu.onrender.com/api';
   console.log('🌍 Detected: Production environment');
 }
@@ -26,7 +26,6 @@ if (process.env.REACT_APP_API_URL) {
 }
 
 console.log('🔗 FINAL API URL:', API_URL);
-console.log('🔗 Full login URL will be:', `${API_URL}/auth/login`);
 
 // Create axios instance
 const api = axios.create({
@@ -34,7 +33,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 30000, // Increased timeout for email operations
 });
 
 // Request interceptor - Log all requests
@@ -63,12 +62,9 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Log detailed error information
     console.error('❌ API Error Details:');
     console.error('Error Message:', error.message);
-    console.error('Error Code:', error.code);
     console.error('Request URL:', error.config?.url);
-    console.error('Full Request URL:', error.config?.baseURL + error.config?.url);
     console.error('Status Code:', error.response?.status);
     console.error('Response Data:', error.response?.data);
     
@@ -100,10 +96,7 @@ testBackendConnection();
 
 // Auth API
 export const authAPI = {
-  login: (credentials) => {
-    console.log('🔑 Login attempt with:', credentials.email);
-    return api.post('/auth/login', credentials);
-  },
+  login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
   getMe: () => api.get('/auth/me'),
 };
@@ -116,7 +109,7 @@ export const donorsAPI = {
   getStats: () => api.get('/donors/stats'),
 };
 
-// REQUESTS API - FIXED WITH ALL MISSING FUNCTIONS
+// REQUESTS API - Complete with all functions
 export const requestsAPI = {
   create: (requestData) => api.post('/requests', requestData),
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
@@ -125,7 +118,7 @@ export const requestsAPI = {
   getStats: () => api.get('/requests/stats'),
   search: (filters = {}) => api.get('/requests/search', { params: filters }),
   
-  // ADD THESE MISSING FUNCTIONS THAT ARE CAUSING ERRORS:
+  // Email functions
   sendToDonor: (data) => api.post('/requests/send-to-donor', data),
   sendBulkRequests: (data) => api.post('/requests/send-bulk', data),
   getHospitalDonorRequests: () => api.get('/requests/hospital/donor-requests'),
@@ -136,24 +129,44 @@ export const requestsAPI = {
   getRequests: () => api.get('/requests'),
 };
 
-// INVENTORY API - FIXED
+// INVENTORY API - FIXED: Handles array response correctly
 export const inventoryAPI = {
-  getAll: () => api.get('/inventory'),
+  // Gets simple array response
+  getAll: () => {
+    console.log('🩸 Fetching inventory...');
+    return api.get('/inventory/simple')  // Use simple endpoint that returns array
+      .then(response => {
+        console.log('✅ Inventory data received:', response.data);
+        return { data: Array.isArray(response.data) ? response.data : [] };
+      })
+      .catch(error => {
+        console.error('❌ Inventory fetch error:', error);
+        return { data: [] };
+      });
+  },
+  
+  // Alternative: Direct array endpoint
+  getSimple: () => api.get('/inventory/simple'),
+  
+  // Get with stats (for admin)
+  getWithStats: () => api.get('/inventory/stats'),
+  
+  // Admin functions
   update: (data) => api.put('/inventory/update', data),
   adjust: (data) => api.put('/inventory/adjust', data),
-  getStats: () => api.get('/inventory/stats'), // NEW
-  getDashboardStats: () => api.get('/inventory/dashboard-stats'), // NEW
-  getCriticalStocks: () => api.get('/inventory/critical'), // NEW
+  getStats: () => api.get('/inventory/stats'),
+  getDashboardStats: () => api.get('/inventory/dashboard-stats'),
+  getCriticalStocks: () => api.get('/inventory/critical'),
 };
 
-// ADMIN API - FIXED
+// ADMIN API
 export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getUsers: () => api.get('/admin/users'),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
-  getRequests: () => api.get('/admin/requests'), // FIXED: Now exists
-  getDashboardStats: () => api.get('/admin/dashboard-stats'), // NEW
-  getUserCounts: () => api.get('/admin/user-counts'), // NEW
+  getRequests: () => api.get('/admin/requests'),
+  getDashboardStats: () => api.get('/admin/dashboard-stats'),
+  getUserCounts: () => api.get('/admin/user-counts'),
 };
 
 // Donations API
@@ -169,12 +182,19 @@ export const analyticsAPI = {
   exportData: (type) => api.get(`/analytics/export?type=${type}`),
 };
 
+// Email API - Direct email testing
+export const emailAPI = {
+  sendTest: (email) => api.get(`/test-email?email=${email}`),
+  sendCustom: (data) => api.post('/email/send-test', data),
+  getConfig: () => api.get('/email-config'),
+  healthCheck: () => api.get('/health/email'),
+};
+
 // Health check
 export const healthAPI = {
   check: () => api.get('/health'),
 };
 
-// Export the api instance for direct use if needed
+// Export the api instance for direct use
 export { api };
-
 export default api;

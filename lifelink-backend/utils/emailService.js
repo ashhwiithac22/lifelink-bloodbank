@@ -1,400 +1,404 @@
-// backend/utils/emailService.js
 const nodemailer = require('nodemailer');
+require('dotenv').config();
 
-console.log('📧 Email Service Initializing...');
+// Debug logging
+console.log('📧 ======= EMAIL SERVICE INIT =======');
+console.log('EMAIL_USER exists:', !!process.env.EMAIL_USER);
+console.log('EMAIL_PASS length:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0, 'chars');
+console.log('===================================\n');
 
-// Create transporter with FIXED configuration
+// Create transporter WITH TIMEOUT CONFIGURATION
 const createTransporter = () => {
-  try {
-    console.log('🔧 Creating transporter with Gmail configuration...');
-    
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      throw new Error('Email credentials not configured in .env file');
-    }
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log('❌ Email credentials not configured');
+    return null;
+  }
 
-    // FIXED: Use correct Gmail configuration
+  try {
     const transporter = nodemailer.createTransport({
-      service: 'gmail', // Use 'gmail' service
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true for 465, false for other ports
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      // CRITICAL: Add timeout configuration
+      connectionTimeout: 15000, // 15 seconds
+      socketTimeout: 20000, // 20 seconds
+      greetingTimeout: 10000, // 10 seconds
+      tls: {
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
+      },
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100
     });
 
-    console.log('✅ Transporter created successfully');
+    console.log('✅ Transporter created successfully with timeout configuration');
     return transporter;
-    
   } catch (error) {
-    console.error('❌ Failed to create transporter:', error.message);
-    throw error;
+    console.error('❌ Error creating transporter:', error.message);
+    return null;
   }
 };
 
-// Verify transporter connection
-const verifyTransporter = async () => {
-  try {
-    console.log('🔧 Verifying SMTP connection...');
-    const transporter = createTransporter();
-    await transporter.verify();
-    console.log('✅ SMTP connection verified successfully');
-    return true;
-  } catch (error) {
-    console.error('❌ SMTP connection failed:', error.message);
-    
-    // Detailed error help
-    if (error.code === 'EAUTH') {
-      console.log('\n🔧 AUTHENTICATION ERROR - COMMON FIXES:');
-      console.log('1. Make sure you are using Gmail App Password (16 characters, no spaces)');
-      console.log('2. Enable 2-Step Verification: https://myaccount.google.com/security');
-      console.log('3. Generate App Password: https://myaccount.google.com/apppasswords');
-      console.log('4. Your App Password should look like: "drmcqoyoergwgjad" (16 chars, no spaces)');
-    }
-    
-    return false;
-  }
-};
+const transporter = createTransporter();
 
-// Enhanced email templates
+// Email templates
 const emailTemplates = {
-  // Donor Blood Request Email - FIXED with better formatting
-  donorBloodRequest: (request, donor, hospital, hospitalContact) => {
-    const urgencyMap = {
-      'low': '🟢 Low Priority',
-      'medium': '🟡 Medium Priority', 
-      'high': '🔴 High Priority',
-      'critical': '🚨 CRITICAL - URGENT'
-    };
-
-    const urgency = urgencyMap[request.urgency] || 'Medium Priority';
-    
-    return {
-      from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
-      to: donor.email,
-      subject: `🩸 ${urgency}: ${request.bloodGroup} Blood Request from ${hospital.hospitalName}`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body { 
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-              line-height: 1.6; 
-              color: #333; 
-              max-width: 600px; 
-              margin: 0 auto; 
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              padding: 20px; 
-            }
-            .container { 
-              background: white; 
-              padding: 40px; 
-              border-radius: 15px; 
-              box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
-              margin: 20px 0;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-              padding-bottom: 20px; 
-              border-bottom: 3px solid #dc3545; 
-            }
-            .urgent-alert { 
-              background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-              color: white; 
-              padding: 25px; 
-              border-radius: 10px; 
-              margin-bottom: 30px; 
-              text-align: center;
-            }
-            .details-card {
-              background: #f8f9fa;
-              padding: 25px;
-              border-radius: 10px;
-              margin-bottom: 25px;
-              border-left: 4px solid #007bff;
-            }
-            .contact-card {
-              background: #e3f2fd;
-              padding: 25px;
-              border-radius: 10px;
-              margin-bottom: 30px;
-              border: 2px solid #2196f3;
-            }
-            .btn {
-              display: inline-block;
-              padding: 14px 28px;
-              background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-              color: white;
-              text-decoration: none;
-              border-radius: 50px;
-              font-weight: bold;
-              font-size: 16px;
-              margin: 10px;
-              transition: transform 0.3s, box-shadow 0.3s;
-            }
-            .btn:hover {
-              transform: translateY(-3px);
-              box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            }
-            .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 1px solid #dee2e6;
-              text-align: center;
-              color: #6c757d;
-              font-size: 14px;
-            }
-            h1 { color: #dc3545; margin: 0 0 10px 0; }
-            h2 { color: #343a40; margin: 0 0 15px 0; }
-            p { margin: 0 0 15px 0; }
-            strong { color: #495057; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🩸 LifeLink Blood Bank</h1>
-              <p style="color: #6c757d; font-size: 18px;">Connecting Donors, Saving Lives</p>
-            </div>
-            
-            <div class="urgent-alert">
-              <h2 style="color: white; margin: 0 0 15px 0;">${urgency.toUpperCase()}</h2>
-              <p style="font-size: 24px; font-weight: bold; margin: 0;">${request.bloodGroup} BLOOD NEEDED</p>
-            </div>
-            
-            <div style="text-align: center; margin: 25px 0;">
-              <p>Dear <strong style="color: #007bff; font-size: 18px;">${donor.name}</strong>,</p>
-              <p style="font-size: 18px;">Your blood type <strong>${donor.bloodGroup}</strong> can save lives!</p>
-            </div>
-            
-            <div class="details-card">
-              <h2>📋 Request Details</h2>
-              <p><strong>Hospital:</strong> ${hospital.hospitalName}</p>
-              <p><strong>Blood Type Needed:</strong> <span style="color: #dc3545; font-weight: bold; font-size: 18px;">${request.bloodGroup}</span></p>
-              <p><strong>Units Required:</strong> ${request.unitsRequired} unit(s)</p>
-              <p><strong>Urgency Level:</strong> ${urgency}</p>
-              <p><strong>Purpose:</strong> ${request.purpose || 'Emergency requirement'}</p>
-              <p><strong>Request ID:</strong> ${request._id || 'N/A'}</p>
-            </div>
-            
-            <div class="contact-card">
-              <h2>📞 Immediate Contact Information</h2>
-              <p><strong>Contact Person:</strong> ${request.contactPerson}</p>
-              <p><strong>Contact Number:</strong> <a href="tel:${request.contactNumber}" style="color: #007bff; text-decoration: none; font-weight: bold;">${request.contactNumber}</a></p>
-              <p><strong>Hospital Email:</strong> ${hospitalContact}</p>
-              <p><strong>Request Time:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <p style="font-size: 20px; color: #28a745; font-weight: bold;">🎯 Your donation can save up to 3 lives!</p>
-              <div>
-                <a href="tel:${request.contactNumber}" class="btn">📞 CALL NOW TO DONATE</a>
-                <br>
-                <a href="mailto:${hospitalContact}" class="btn" style="background: linear-gradient(135deg, #007bff 0%, #6610f2 100%);">📧 EMAIL RESPONSE</a>
-              </div>
-            </div>
-            
-            <div class="footer">
-              <p><strong style="color: #dc3545; font-size: 16px;">LifeLink Blood Bank</strong><br>
-              🏥 Emergency Helpline: <strong>0422-3566580</strong> (Available 24/7)<br>
-              📧 Email: ${process.env.EMAIL_USER}</p>
-              <p style="font-size: 12px; color: #999; margin-top: 20px;">
-                This is an automated blood request email from LifeLink Blood Bank System.<br>
-                Please do not reply to this email. Contact the hospital directly.<br>
-                Request ID: ${request._id || 'TEST'} | Generated: ${new Date().toISOString()}
-              </p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `
-URGENT BLOOD REQUEST - ${request.bloodGroup} BLOOD NEEDED
-
-Dear ${donor.name},
-
-${urgency.toUpperCase()}
-
-${hospital.hospitalName} urgently needs ${request.bloodGroup} blood.
-
-REQUEST DETAILS:
-- Hospital: ${hospital.hospitalName}
-- Blood Type Needed: ${request.bloodGroup}
-- Units Required: ${request.unitsRequired}
-- Urgency: ${request.urgency || 'Medium'}
-- Purpose: ${request.purpose || 'Emergency requirement'}
-
-IMMEDIATE CONTACT:
-- Contact Person: ${request.contactPerson}
-- Phone: ${request.contactNumber}
-- Hospital Email: ${hospitalContact}
-
-YOUR DONATION CAN SAVE UP TO 3 LIVES!
-
-Please contact the hospital immediately if you can donate.
-
-LifeLink Blood Bank
-Emergency Helpline: 0422-3566580 (24/7)
-Email: ${process.env.EMAIL_USER}
-
-This is an automated blood request. Please contact the hospital directly.
-Request ID: ${request._id || 'TEST'}
-      `
-    };
-  },
-
-  // Test email template
   testEmail: (toEmail) => ({
     from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
     to: toEmail,
-    subject: '✅ LifeLink Email System Test - SUCCESS',
+    subject: '✅ LifeLink Email Service Test',
+    text: `This is a test email from LifeLink Blood Bank system.\n\nIf you received this, email service is working correctly!\n\nTime: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
     html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
-          .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
-          .success { color: #28a745; font-size: 48px; margin: 20px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="success">✅</div>
-          <h2 style="color: #28a745;">Email System Working Perfectly!</h2>
-          <p>Test email sent successfully on <strong>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</strong></p>
-          <p>Your LifeLink Blood Bank email system is configured correctly and ready to send blood request emails.</p>
-          <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <p style="margin: 0;"><strong>LifeLink Blood Bank</strong><br>Emergency Helpline: 0422-3566580</p>
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <div style="background: linear-gradient(135deg, #dc3545, #c82333); padding: 20px; border-radius: 8px 8px 0 0; color: white; text-align: center;">
+          <h1 style="margin: 0;">✅ LifeLink Email Test</h1>
+          <p style="margin: 10px 0 0 0;">Blood Bank Management System</p>
+        </div>
+        <div style="padding: 20px;">
+          <h2 style="color: #333;">Email Service is Working!</h2>
+          <p style="color: #555; line-height: 1.6;">
+            This is a test email from the LifeLink Blood Bank system. 
+            If you received this, the email service is configured correctly and ready to send notifications.
+          </p>
+          <div style="background: #e7f3ff; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <p style="margin: 0; color: #004085;">
+              <strong>Test Details:</strong><br>
+              Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}<br>
+              Service: Gmail SMTP<br>
+              Status: Active
+            </p>
+          </div>
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 14px;">
+              <strong>LifeLink Blood Bank</strong><br>
+              Emergency Helpline: 0422-3566580<br>
+              24/7 Blood Donation Service
+            </p>
           </div>
         </div>
-      </body>
-      </html>
+      </div>
+    `
+  }),
+
+  bloodRequest: (toEmail, donorName, requestDetails) => ({
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: `🩸 Urgent Blood Request: ${requestDetails.bloodGroup} Needed`,
+    text: `
+Dear ${donorName},
+
+We have an urgent requirement for ${requestDetails.bloodGroup} blood.
+
+Patient Details:
+- Hospital: ${requestDetails.hospitalName || 'LifeLink Hospital'}
+- Blood Group: ${requestDetails.bloodGroup}
+- Units Required: ${requestDetails.unitsRequired}
+- Urgency: ${requestDetails.urgency || 'High'}
+- Location: ${requestDetails.location || 'Coimbatore'}
+
+If you are available to donate, please respond to this email or call the emergency helpline.
+
+Emergency Contact: 0422-3566580
+
+Thank you for your life-saving support!
+
+LifeLink Blood Bank
+24/7 Emergency Service
+${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
     `,
-    text: `Test email sent successfully on ${new Date().toLocaleString()}\n\nYour LifeLink Blood Bank email system is working correctly!\n\nLifeLink Blood Bank\nEmergency: 0422-3566580`
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <div style="background: linear-gradient(135deg, #dc3545, #c82333); padding: 20px; border-radius: 8px 8px 0 0; color: white; text-align: center;">
+          <h1 style="margin: 0;">🩸 URGENT BLOOD REQUEST</h1>
+          <p style="margin: 10px 0 0 0;">LifeLink Blood Bank - Emergency Alert</p>
+        </div>
+        
+        <div style="padding: 20px;">
+          <h2 style="color: #dc3545; margin-top: 0;">Dear ${donorName},</h2>
+          
+          <p style="color: #555; line-height: 1.6; font-size: 16px;">
+            We have an <strong style="color: #dc3545;">URGENT REQUIREMENT</strong> for 
+            <span style="background: #ffebee; padding: 2px 8px; border-radius: 4px; font-weight: bold;">${requestDetails.bloodGroup}</span> blood.
+          </p>
+          
+          <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <h3 style="color: #856404; margin-top: 0;">📋 Request Details:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #333; width: 40%;"><strong>Hospital:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.hospitalName || 'LifeLink Hospital'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Blood Group:</strong></td>
+                <td style="padding: 8px 0; color: #555;">
+                  <span style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold;">
+                    ${requestDetails.bloodGroup}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Units Required:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.unitsRequired} unit(s)</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Urgency Level:</strong></td>
+                <td style="padding: 8px 0; color: #555;">
+                  <span style="color: ${requestDetails.urgency === 'high' ? '#dc3545' : requestDetails.urgency === 'medium' ? '#ffc107' : '#28a745'}; font-weight: bold;">
+                    ${(requestDetails.urgency || 'High').toUpperCase()}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Location:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.location || 'Coimbatore'}</td>
+              </tr>
+            </table>
+          </div>
+          
+          <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <h3 style="color: #155724; margin-top: 0;">✅ You Can Help Save Lives!</h3>
+            <p style="color: #155724; margin: 10px 0;">
+              If you are available to donate blood, please:
+            </p>
+            <ul style="color: #155724; padding-left: 20px;">
+              <li>Reply to this email confirming availability</li>
+              <li>Contact the emergency helpline immediately</li>
+              <li>Visit the nearest donation center</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0; padding: 20px; background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 8px;">
+            <h3 style="color: #dc3545; margin-top: 0;">🚨 Emergency Contact</h3>
+            <p style="font-size: 24px; font-weight: bold; color: #333; margin: 10px 0;">
+              📞 0422-3566580
+            </p>
+            <p style="color: #666; font-size: 14px; margin: 5px 0;">
+              Available 24/7 • Immediate Response
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 14px; line-height: 1.5;">
+              <strong>LifeLink Blood Bank</strong><br>
+              A Unit of LifeLink Hospitals<br>
+              Emergency Helpline: 0422-3566580<br>
+              Email: support@lifelinkbloodbank.in<br>
+              Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+            </p>
+            <p style="color: #999; font-size: 12px; margin-top: 10px;">
+              "Every drop counts. Your donation can save up to 3 lives."
+            </p>
+          </div>
+        </div>
+      </div>
+    `
+  }),
+
+  requestConfirmation: (toEmail, hospitalName, requestDetails) => ({
+    from: `"LifeLink Blood Bank" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: `✅ Blood Request Submitted: ${requestDetails.bloodGroup}`,
+    text: `
+Dear ${hospitalName},
+
+Your blood request has been submitted successfully.
+
+Request ID: ${requestDetails.requestId}
+Blood Group: ${requestDetails.bloodGroup}
+Units Requested: ${requestDetails.unitsRequired}
+Urgency: ${requestDetails.urgency}
+
+We have sent email notifications to available donors matching the blood group.
+
+You can track the status in your dashboard.
+
+Thank you for using LifeLink Blood Bank.
+
+Emergency Contact: 0422-3566580
+
+LifeLink Blood Bank
+${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+    `,
+    html: `
+      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <div style="background: linear-gradient(135deg, #28a745, #218838); padding: 20px; border-radius: 8px 8px 0 0; color: white; text-align: center;">
+          <h1 style="margin: 0;">✅ REQUEST CONFIRMED</h1>
+          <p style="margin: 10px 0 0 0;">Blood Request Submitted Successfully</p>
+        </div>
+        
+        <div style="padding: 20px;">
+          <h2 style="color: #333; margin-top: 0;">Dear ${hospitalName},</h2>
+          
+          <p style="color: #555; line-height: 1.6; font-size: 16px;">
+            Your blood request has been <strong style="color: #28a745;">submitted successfully</strong> 
+            and notifications have been sent to available donors.
+          </p>
+          
+          <div style="background: #e7f3ff; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <h3 style="color: #004085; margin-top: 0;">📋 Request Summary:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0; color: #333; width: 40%;"><strong>Request ID:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.requestId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Blood Group:</strong></td>
+                <td style="padding: 8px 0; color: #555;">
+                  <span style="background: #dc3545; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold;">
+                    ${requestDetails.bloodGroup}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Units Required:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.unitsRequired}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Urgency:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${requestDetails.urgency}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Status:</strong></td>
+                <td style="padding: 8px 0; color: #28a745; font-weight: bold;">✅ Active</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #333;"><strong>Submitted:</strong></td>
+                <td style="padding: 8px 0; color: #555;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
+              </tr>
+            </table>
+          </div>
+          
+          <div style="background: #d4edda; padding: 15px; border-radius: 6px; margin: 20px 0;">
+            <h3 style="color: #155724; margin-top: 0;">📧 Next Steps:</h3>
+            <ul style="color: #155724; padding-left: 20px;">
+              <li>Email notifications sent to matching donors</li>
+              <li>Track responses in your dashboard</li>
+              <li>Donors will contact you directly</li>
+              <li>Update request status when fulfilled</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="https://lifelink-bloodbank.netlify.app/requests" 
+               style="background: linear-gradient(135deg, #dc3545, #c82333); color: white; padding: 12px 30px; 
+                      text-decoration: none; border-radius: 25px; font-weight: bold; display: inline-block;">
+              📊 View in Dashboard
+            </a>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 14px; line-height: 1.5;">
+              <strong>LifeLink Blood Bank</strong><br>
+              Emergency Helpline: 0422-3566580<br>
+              Email: support@lifelinkbloodbank.in<br>
+              Time: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+            </p>
+          </div>
+        </div>
+      </div>
+    `
   })
 };
 
-// Enhanced send email function with detailed logging
+// Send email function with timeout
 const sendEmail = async (emailOptions) => {
+  if (!transporter) {
+    console.error('❌ Cannot send email: Transporter not created');
+    return {
+      success: false,
+      error: 'Email service not configured',
+      code: 'NO_TRANSPORTER'
+    };
+  }
+
   try {
-    console.log('\n📧 ======= EMAIL SENDING ATTEMPT =======');
-    console.log('To:', emailOptions.to);
-    console.log('Subject:', emailOptions.subject);
-    console.log('From:', process.env.EMAIL_USER);
-
-    // Check if email credentials exist
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.log('❌ EMAIL CREDENTIALS MISSING in .env file');
-      console.log('💡 Add to .env:');
-      console.log('EMAIL_USER=your-email@gmail.com');
-      console.log('EMAIL_PASS=your-16-char-app-password');
-      return { 
-        success: false, 
-        error: 'Email credentials not configured in .env',
-        skipped: true 
-      };
-    }
-
-    // Create transporter
-    const transporter = createTransporter();
+    console.log(`📤 Attempting to send email to: ${emailOptions.to}`);
+    console.log(`📝 Subject: ${emailOptions.subject}`);
     
-    // Send email
-    console.log('📤 Sending email...');
-    const info = await transporter.sendMail(emailOptions);
+    // Add timeout to the send operation
+    const sendPromise = transporter.sendMail(emailOptions);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout (15s)')), 15000);
+    });
     
-    console.log('✅ EMAIL SENT SUCCESSFULLY!');
-    console.log('📬 Message ID:', info.messageId);
-    console.log('📧 Response:', info.response);
-    console.log('================================\n');
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     
-    return { 
-      success: true, 
+    console.log(`✅ Email sent successfully to ${emailOptions.to}`);
+    console.log(`📨 Message ID: ${info.messageId}`);
+    console.log(`🔄 Response: ${info.response}`);
+    
+    return {
+      success: true,
       messageId: info.messageId,
       response: info.response,
-      to: emailOptions.to
+      to: emailOptions.to,
+      timestamp: new Date().toISOString()
     };
-    
   } catch (error) {
-    console.error('\n❌ EMAIL SENDING FAILED!');
-    console.error('Error:', error.message);
-    console.error('Error Code:', error.code);
+    console.error('❌ Email sending failed:', error.message);
+    console.error('Error details:', error);
     
-    // Detailed error analysis
-    if (error.code === 'EAUTH') {
-      console.log('\n🔧 AUTHENTICATION ISSUE DETECTED');
-      console.log('Your EMAIL_PASS in .env should be:');
-      console.log('1. 16 characters long');
-      console.log('2. No spaces (should be like: drmcqoyoergwgjad)');
-      console.log('3. Gmail App Password, NOT your regular password');
-      console.log('4. Generate at: https://myaccount.google.com/apppasswords');
-    }
-    
-    console.log('================================\n');
-    
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: error.message,
-      code: error.code,
-      command: error.command
+      code: error.code || 'SEND_ERROR',
+      timestamp: new Date().toISOString()
     };
   }
 };
 
 // Test email configuration
 const testEmailConfig = async (testEmail = null) => {
-  console.log('\n🧪 ======= EMAIL CONFIGURATION TEST =======');
-  console.log('Testing with EMAIL_USER:', process.env.EMAIL_USER);
-  
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log('❌ CREDENTIALS MISSING in .env file');
-    console.log('================================\n');
+  if (!transporter) {
+    console.error('❌ Test failed: Transporter not created');
     return false;
   }
-  
+
   try {
-    // Test SMTP connection
-    console.log('🔧 Testing SMTP connection to Gmail...');
-    const transporter = createTransporter();
-    await transporter.verify();
-    console.log('✅ SMTP CONNECTION VERIFIED');
+    console.log('🔧 Testing email configuration...');
     
-    // Send test email if email provided
+    // Test connection
+    const verifyResult = await transporter.verify();
+    console.log('✅ SMTP Connection verified:', verifyResult);
+    
+    // Try to send test email if email provided
     if (testEmail) {
-      console.log('📧 Sending test email to:', testEmail);
-      
-      const testResult = await sendEmail({
-        from: `"LifeLink Test" <${process.env.EMAIL_USER}>`,
-        to: testEmail,
-        subject: '✅ LifeLink Email Test - SUCCESS',
-        text: 'Congratulations! Your LifeLink email system is working correctly.',
-        html: '<div style="text-align: center; padding: 30px;"><h2 style="color: #28a745;">✅ Email Test Successful!</h2><p>Your LifeLink email system is working correctly.</p></div>'
-      });
-      
-      if (testResult.success) {
-        console.log('🎉 TEST EMAIL SENT SUCCESSFULLY!');
-      } else {
-        console.log('❌ TEST EMAIL FAILED:', testResult.error);
-      }
+      console.log(`📧 Sending test email to ${testEmail}...`);
+      const testResult = await sendEmail(emailTemplates.testEmail(testEmail));
+      return testResult.success;
     }
     
-    console.log('✅ EMAIL CONFIGURATION TEST COMPLETE');
-    console.log('================================\n');
     return true;
-    
   } catch (error) {
-    console.error('❌ EMAIL CONFIGURATION TEST FAILED');
-    console.error('Error:', error.message);
-    console.log('================================\n');
+    console.error('❌ Email configuration test failed:', error.message);
+    console.error('Error stack:', error.stack);
     return false;
   }
 };
 
-module.exports = { 
-  emailTemplates, 
-  sendEmail, 
+// Verify transporter
+const verifyTransporter = async () => {
+  if (!transporter) {
+    return { valid: false, error: 'Transporter not created' };
+  }
+
+  try {
+    await transporter.verify();
+    return { valid: true, message: 'SMTP connection verified' };
+  } catch (error) {
+    return { valid: false, error: error.message };
+  }
+};
+
+module.exports = {
+  sendEmail,
+  emailTemplates,
   testEmailConfig,
-  verifyTransporter
+  verifyTransporter,
+  transporter
 };
