@@ -315,6 +315,28 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Add this route to backend/routes/requests.js (before module.exports)
+
+// GET /api/admin/requests - For admin dashboard
+router.get('/admin/requests', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
+
+    const requests = await Request.find({})
+      .populate('hospitalId', 'hospitalName email contact city')
+      .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
+      .sort({ createdAt: -1 })
+      .limit(50); // Limit to 50 most recent
+
+    res.json(requests);
+  } catch (error) {
+    console.error('Error fetching admin requests:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/admin/all', auth, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {

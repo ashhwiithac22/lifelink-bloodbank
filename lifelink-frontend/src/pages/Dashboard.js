@@ -1,4 +1,3 @@
-//src/pages/Dashboard.js
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -34,7 +33,7 @@ const Dashboard = () => {
 
   const loadAdminRecentRequests = async () => {
     try {
-      const response = await adminAPI.getRequests();
+      const response = await adminAPI.getRequests ? await adminAPI.getRequests() : await requestsAPI.getAll();
       const requests = response.data || [];
       setRecentRequests(requests.slice(0, 5));
       setLastUpdate(new Date());
@@ -80,30 +79,81 @@ const Dashboard = () => {
     return Array.from(uniqueMap.values()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   };
 
-  const loadDashboardData = async () => {
-    try {
-      if (user?.role === 'admin') {
-        const [dashboardResponse, requestsResponse, donorsResponse, donationsResponse, inventoryResponse] = await Promise.all([
-          adminAPI.getDashboard(),
-          adminAPI.getRequests(), // CHANGED: Use admin API for requests
-          donorsAPI.getAll({ availability: true }),
-          donationsAPI.getStats(),
-          inventoryAPI.getAll()
-        ]);
-        
-        setStats(dashboardResponse.data);
-        setRecentRequests(requestsResponse.data.slice(0, 5)); // Show only 5 recent
-        setRecentDonors(donorsResponse.data.slice(0, 6));
-        setRecentDonations(donationsResponse.data.donationsByBloodGroup || []);
-        calculateInventoryStats(inventoryResponse.data);
-      } else if (user?.role === 'hospital') {
-        const [requestsResponse, inventoryResponse, donorsResponse, donationsResponse] = await Promise.all([
-          requestsAPI.getHospitalDonorRequests(),
-          inventoryAPI.getAll(),
-          donorsAPI.getAll({ availability: true }),
-          donationsAPI.getStats()
-        ]);
-        
+ const loadDashboardData = async () => {
+  try {
+    console.log('🔄 Loading dashboard data for:', user?.role);
+    
+    if (user?.role === 'admin') {
+      const [dashboardResponse, usersResponse, inventoryResponse] = await Promise.all([
+        adminAPI.getDashboard(),
+        adminAPI.getUsers(),
+        inventoryAPI.getAll()
+      ]);
+      
+      console.log('📊 Admin dashboard response:', dashboardResponse.data);
+      console.log('👥 Users response count:', usersResponse.data?.length);
+      console.log('🩸 Inventory response:', inventoryResponse.data);
+      
+      // Set stats from dashboard response
+      setStats(dashboardResponse.data);
+      
+      // Calculate inventory stats
+      const inventory = inventoryResponse.data.inventory || inventoryResponse.data;
+      const totalUnits = Array.isArray(inventory) 
+        ? inventory.reduce((sum, item) => sum + (item.unitsAvailable || 0), 0)
+        : 0;
+      const criticalStock = Array.isArray(inventory)
+        ? inventory.filter(item => (item.unitsAvailable || 0) < 5).length
+        : 0;
+      
+      setInventoryStats({
+        totalUnits,
+        criticalStock,
+        totalBloodGroups: Array.isArray(inventory) ? inventory.length : 8
+      });
+      
+      // Get donors for display
+      const donors = usersResponse.data.filter(u => u.role === 'donor');
+      setRecentDonors(donors.slice(0, 6));
+      
+      // Get requests
+      try {
+        const requestsResponse = await adminAPI.getRequests();
+        setRecentRequests(requestsResponse.data.slice(0, 5));
+      } catch (reqError) {
+        console.log('Could not load requests:', reqError.message);
+      }
+      
+    } else if (user?.role === 'hospital') {
+      const [inventoryResponse, donorsResponse] = await Promise.all([
+        inventoryAPI.getAll(),
+        donorsAPI.getAll({ availability: true })
+      ]);
+      
+      console.log('🏥 Hospital inventory:', inventoryResponse.data);
+      console.log('🏥 Hospital donors:', donorsResponse.data?.length);
+      
+      // Calculate inventory stats
+      const inventory = inventoryResponse.data.inventory || inventoryResponse.data;
+      const totalUnits = Array.isArray(inventory) 
+        ? inventory.reduce((sum, item) => sum + (item.unitsAvailable || 0), 0)
+        : 0;
+      const criticalStock = Array.isArray(inventory)
+        ? inventory.filter(item => (item.unitsAvailable || 0) < 5).length
+        : 0;
+      
+      setInventoryStats({
+        totalUnits,
+        criticalStock,
+        totalBloodGroups: Array.isArray(inventory) ? inventory.length : 8
+      });
+      
+      // Set donors
+      setRecentDonors(donorsResponse.data.slice(0, 4));
+      
+      // Get requests
+      try {
+        const requestsResponse = await requestsAPI.getHospitalDonorRequests();
         const requests = requestsResponse.data || [];
         const uniqueRequests = filterUniqueRequests(requests);
         
@@ -112,58 +162,94 @@ const Dashboard = () => {
           pendingRequests: uniqueRequests.filter(req => req.status === 'pending').length,
           approvedRequests: uniqueRequests.filter(req => req.status === 'approved').length,
           totalDonorsContacted: uniqueRequests.reduce((sum, req) => sum + (req.totalDonorsContacted || 0), 0),
-          emailsSent: uniqueRequests.reduce((sum, req) => sum + (req.emailsSent || 0), 0)
+          emailsSent: uniqueRequests.reduce((sum, req) => sum + (req.emailsSent || 0), 0),
+          availableDonors: donorsResponse.data.length
         });
         
         setRecentRequests(uniqueRequests.slice(0, 5));
-        setRecentDonors(donorsResponse.data.slice(0, 4));
-        calculateInventoryStats(inventoryResponse.data);
-      } else if (user?.role === 'donor') {
-        const [inventoryResponse, donationsResponse] = await Promise.all([
-          inventoryAPI.getAll(),
-          donationsAPI.getAll()
-        ]);
-        
-        const donorDonations = donationsResponse.data || [];
-        setStats({ 
-          totalDonations: donorDonations.length,
-          totalUnits: donorDonations.reduce((sum, donation) => sum + (donation.unitsDonated || 1), 0)
-        });
-        setRecentDonations(donorDonations.slice(0, 4));
-        calculateInventoryStats(inventoryResponse.data);
-      }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      // Set default empty states
-      if (user?.role === 'donor') {
-        setStats({ 
-          totalDonations: 0,
-          totalUnits: 0
-        });
-        setRecentDonations([]);
-      } else if (user?.role === 'hospital') {
-        setStats({ 
+      } catch (reqError) {
+        console.log('Could not load hospital requests:', reqError.message);
+        setStats({
           totalRequests: 0,
           pendingRequests: 0,
           approvedRequests: 0,
           totalDonorsContacted: 0,
-          emailsSent: 0
+          emailsSent: 0,
+          availableDonors: donorsResponse.data.length
         });
-        setRecentRequests([]);
-      } else if (user?.role === 'admin') {
-        setStats({ 
-          totalDonors: 0,
-          totalHospitals: 0,
-          totalRequests: 0,
-          pendingRequests: 0
-        });
-        setRecentRequests([]);
       }
-    } finally {
-      setLoading(false);
+      
+    } else if (user?.role === 'donor') {
+      const [inventoryResponse, donationsResponse] = await Promise.all([
+        inventoryAPI.getAll(),
+        donationsAPI.getAll({ donorId: user._id })
+      ]);
+      
+      // Calculate inventory stats
+      const inventory = inventoryResponse.data.inventory || inventoryResponse.data;
+      const totalUnits = Array.isArray(inventory) 
+        ? inventory.reduce((sum, item) => sum + (item.unitsAvailable || 0), 0)
+        : 0;
+      const criticalStock = Array.isArray(inventory)
+        ? inventory.filter(item => (item.unitsAvailable || 0) < 5).length
+        : 0;
+      
+      setInventoryStats({
+        totalUnits,
+        criticalStock,
+        totalBloodGroups: Array.isArray(inventory) ? inventory.length : 8
+      });
+      
+      const donorDonations = donationsResponse.data || [];
+      setStats({ 
+        totalDonations: donorDonations.length,
+        totalUnits: donorDonations.reduce((sum, donation) => sum + (donation.unitsDonated || 1), 0)
+      });
+      setRecentDonations(donorDonations.slice(0, 4));
     }
-  };
-
+    
+    console.log('✅ Dashboard data loaded successfully');
+  } catch (error) {
+    console.error('❌ Error loading dashboard data:', error);
+    
+    // Set default stats
+    setInventoryStats({
+      totalUnits: 0,
+      criticalStock: 0,
+      totalBloodGroups: 8
+    });
+    
+    if (user?.role === 'donor') {
+      setStats({ 
+        totalDonations: 0,
+        totalUnits: 0
+      });
+      setRecentDonations([]);
+    } else if (user?.role === 'hospital') {
+      setStats({ 
+        totalRequests: 0,
+        pendingRequests: 0,
+        approvedRequests: 0,
+        totalDonorsContacted: 0,
+        emailsSent: 0,
+        availableDonors: 0
+      });
+      setRecentRequests([]);
+      setRecentDonors([]);
+    } else if (user?.role === 'admin') {
+      setStats({ 
+        totalDonors: 0,
+        totalHospitals: 0,
+        totalRequests: 0,
+        pendingRequests: 0
+      });
+      setRecentRequests([]);
+      setRecentDonors([]);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
   const calculateInventoryStats = (inventory) => {
     const totalUnits = inventory.reduce((sum, item) => sum + (item.unitsAvailable || 0), 0);
     const criticalStock = inventory.filter(item => (item.unitsAvailable || 0) < 5).length;
@@ -209,7 +295,6 @@ const Dashboard = () => {
     return <span className={`urgency-badge ${urgencyClasses[urgency]}`}>{urgency}</span>;
   };
 
-  // NEW: Format request info for admin display
   const formatAdminRequestInfo = (request) => {
     if (request.isAuto) {
       return '🤖 Auto-generated • Low inventory alert';
@@ -368,7 +453,6 @@ const Dashboard = () => {
                         <p>View all system users</p>
                       </div>
                     </Link>
-                    {/* FIXED: Link to new Manage Requests page */}
                     <Link to="/admin/manage-requests" className="action-card">
                       <div className="action-icon">📋</div>
                       <div className="action-content">
@@ -452,7 +536,7 @@ const Dashboard = () => {
                       <div className="stat-icon">🩸</div>
                       <div className="stat-info">
                         <h3>Available Donors</h3>
-                        <p className="stat-number">{recentDonors.length}</p>
+                        <p className="stat-number">{stats.availableDonors || 0}</p>
                       </div>
                     </div>
                   </>
