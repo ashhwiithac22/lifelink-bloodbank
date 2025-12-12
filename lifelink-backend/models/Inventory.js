@@ -39,7 +39,7 @@ inventorySchema.post('save', async function(doc) {
   try {
     // If units are ≤ 3, trigger auto-request creation
     if (doc.unitsAvailable <= 3) {
-      const Request = require('./Request');
+      const Request = require('./BloodRequest');
       
       // Use setTimeout to avoid blocking the save operation
       setTimeout(async () => {

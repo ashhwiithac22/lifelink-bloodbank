@@ -1,7 +1,8 @@
+//routes/analytics.js
 const express = require('express');
 const User = require('../models/User');
 const Donation = require('../models/Donation');
-const Request = require('../models/Request');
+const Request = require('../models/BloodRequest');
 const Inventory = require('../models/Inventory');
 
 const router = express.Router();

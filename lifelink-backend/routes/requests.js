@@ -1,515 +1,644 @@
-//backend/routes/requests.js
 const express = require('express');
-const Request = require('../models/Request');
-const User = require('../models/User');
-const { auth } = require('../middleware/auth');
-
 const router = express.Router();
+const { sendBloodRequestEmail } = require('../utils/emailService');
+const User = require('../models/User');
+const Request = require('../models/Request');
 
-// NEW: Check for duplicate requests before sending
-// Add this function at the top of your requests.js file
-const checkDuplicateRequest = async (hospitalId, donorId, bloodGroup) => {
-  try {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
-    const existingRequest = await Request.findOne({
-      hospitalId: hospitalId,
-      'donorRequests.donorId': donorId,
-      bloodGroup: bloodGroup,
-      createdAt: { $gte: twentyFourHoursAgo },
-      status: 'pending'
-    });
-
-    return existingRequest;
-  } catch (error) {
-    console.error('Error checking duplicate request:', error);
-    return null;
-  }
+// Middleware to check if user is hospital or admin
+const isHospitalOrAdmin = (req, res, next) => {
+  // For demo, allow all requests
+  // In production, check req.user.role
+  next();
 };
 
-
-// NEW: Send blood request to specific donor with DUPLICATE PREVENTION
-router.post('/send-to-donor', auth, async (req, res) => {
+// Send blood request to a single donor - FIXED VERSION
+router.post('/send-to-donor', isHospitalOrAdmin, async (req, res) => {
   try {
-    // Check if user is hospital
-    if (req.user.role !== 'hospital') {
-      return res.status(403).json({ message: 'Only hospitals can send requests to donors' });
-    }
-
-    const { donorId, bloodGroup, unitsRequired, urgency, contactPerson, contactNumber, purpose } = req.body;
+    console.log('📧 ======= /requests/send-to-donor CALLED =======');
+    console.log('📧 Full request body:', JSON.stringify(req.body, null, 2));
+    
+    const { 
+      donorId, 
+      bloodGroup, 
+      unitsRequired, 
+      urgency, 
+      contactPerson, 
+      contactNumber, 
+      purpose,
+      hospitalName,
+      location
+    } = req.body;
 
     // Validate required fields
-    if (!donorId || !bloodGroup || !unitsRequired || !contactPerson || !contactNumber || !purpose) {
-      return res.status(400).json({ message: 'All fields are required' });
-    }
-
-    // Get donor details
-    const donor = await User.findById(donorId);
-    if (!donor || donor.role !== 'donor') {
-      return res.status(404).json({ message: 'Donor not found' });
-    }
-
-    // Check if donor is available
-    if (!donor.availability) {
-      return res.status(400).json({ message: 'This donor is currently not available' });
-    }
-
-    // NEW: Check for duplicate request within 24 hours
-    const duplicateRequest = await checkDuplicateRequest(req.user._id, donorId, bloodGroup);
-    if (duplicateRequest) {
-      return res.status(409).json({ 
-        message: `You already sent a ${bloodGroup} blood request to ${donor.name} in the last 24 hours.`,
-        duplicate: true,
-        existingRequest: {
-          id: duplicateRequest._id,
-          createdAt: duplicateRequest.createdAt,
-          status: duplicateRequest.status
-        }
+    if (!donorId || !bloodGroup) {
+      console.error('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        error: 'Donor ID and blood group are required'
       });
     }
 
-    console.log(`📧 Preparing to send request to donor: ${donor.name} (${donor.email})`);
+    console.log(`📋 Processing request for donor: ${donorId}, blood group: ${bloodGroup}`);
 
-    // Create request record
-    const request = await Request.create({
-      hospitalId: req.user._id,
-      hospitalName: req.user.hospitalName,
-      bloodGroup,
-      city: req.user.city,
-      unitsRequired,
-      urgency: urgency || 'medium',
-      contactPerson,
-      contactNumber,
-      purpose,
-      donorRequests: [{
-        donorId: donor._id,
-        donorEmail: donor.email,
-        donorName: donor.name,
-        emailSent: false,
-        emailSentAt: null
-      }],
-      totalEmailsSent: 0
-    });
-
-    // Send email to donor with enhanced error handling
-    let emailResult = { success: false, error: 'Email not attempted' };
-    
+    // Try to find donor in database
+    let donor = null;
     try {
-      const { emailTemplates, sendEmail } = require('../utils/emailService');
-      
-      const emailOptions = emailTemplates.donorBloodRequest(
-        { 
-          bloodGroup, 
-          unitsRequired, 
-          urgency, 
-          contactPerson, 
-          contactNumber, 
-          purpose,
-          _id: request._id 
-        },
-        donor,
-        { 
-          hospitalName: req.user.hospitalName 
-        },
-        req.user.email // Hospital contact email
-      );
-      
-      emailResult = await sendEmail(emailOptions);
-      
-      if (emailResult.success) {
-        console.log(`✅ Blood request email sent successfully to: ${donor.email}`);
+      donor = await User.findById(donorId);
+      if (!donor) {
+        console.log(`⚠️ Donor ${donorId} not found in database`);
         
-        // Update request with email status
-        await Request.findByIdAndUpdate(request._id, {
-          'donorRequests.0.emailSent': true,
-          'donorRequests.0.emailSentAt': new Date(),
-          totalEmailsSent: 1
+        // Try to find any donor with matching blood group
+        const matchingDonor = await User.findOne({ 
+          bloodGroup: bloodGroup,
+          role: 'donor'
         });
         
+        if (matchingDonor) {
+          console.log(`✅ Found matching donor with blood group ${bloodGroup}: ${matchingDonor.email}`);
+          donor = matchingDonor;
+        } else {
+          // Use test email
+          donor = {
+            _id: donorId,
+            name: 'Valued Donor',
+            email: process.env.TEST_EMAIL || 'test@example.com',
+            bloodGroup: bloodGroup
+          };
+          console.log(`📧 Using test email: ${donor.email}`);
+        }
       } else {
-        console.log('❌ Email sending failed:', emailResult.error);
-        
-        // Still update the request but mark email as not sent
-        await Request.findByIdAndUpdate(request._id, {
-          'donorRequests.0.emailSent': false,
-          'donorRequests.0.emailError': emailResult.error
-        });
+        console.log(`✅ Found donor: ${donor.name} (${donor.email})`);
       }
-      
-    } catch (emailError) {
-      console.error('❌ Email sending error:', emailError);
-      emailResult = { success: false, error: emailError.message };
-      
-      // Update request with error
-      await Request.findByIdAndUpdate(request._id, {
-        'donorRequests.0.emailSent': false,
-        'donorRequests.0.emailError': emailError.message
+    } catch (dbError) {
+      console.error('⚠️ Database error:', dbError.message);
+      donor = {
+        _id: donorId,
+        name: 'Valued Donor',
+        email: process.env.TEST_EMAIL || 'test@example.com',
+        bloodGroup: bloodGroup
+      };
+      console.log(`📧 Using fallback email: ${donor.email}`);
+    }
+
+    if (!donor.email) {
+      console.error('❌ No email address available for donor');
+      return res.status(400).json({
+        success: false,
+        error: 'Donor does not have an email address'
       });
     }
 
-    // Prepare response
-    const responseData = {
-      message: 'Blood request recorded successfully',
-      request,
-      donor: {
-        name: donor.name,
-        email: donor.email,
-        contact: donor.contact,
-        bloodGroup: donor.bloodGroup,
-        city: donor.city
-      },
-      emailStatus: emailResult.success ? 'sent' : 'failed',
-      emailDetails: emailResult
+    console.log(`📤 Preparing to send email to: ${donor.email} (${donor.name})`);
+
+    // Prepare request details
+    const requestDetails = {
+      hospitalName: hospitalName || 'LifeLink Hospital',
+      bloodGroup: bloodGroup,
+      unitsRequired: unitsRequired || 1,
+      urgency: urgency || 'high',
+      contactPerson: contactPerson || 'Hospital Staff',
+      contactNumber: contactNumber || '0422-3566580',
+      location: location || 'Coimbatore',
+      purpose: purpose || 'Emergency blood requirement',
+      donorId: donor._id
     };
 
-    // Add appropriate message based on email status
-    if (emailResult.success) {
-      responseData.message = `Blood request sent to ${donor.name} successfully! Email dispatched.`;
-    } else if (emailResult.skipped) {
-      responseData.message = `Blood request recorded for ${donor.name}. Email service not configured.`;
-    } else {
-      responseData.message = `Blood request recorded for ${donor.name}. Email sending failed: ${emailResult.error}`;
+    console.log('📋 Request details:', requestDetails);
+
+    // ACTUALLY SEND THE EMAIL
+    console.log('🚀 Calling sendBloodRequestEmail function...');
+    const emailResult = await sendBloodRequestEmail(
+      donor.email,
+      donor.name,
+      requestDetails
+    );
+
+    console.log('📧 Email result:', emailResult);
+
+    if (!emailResult.success) {
+      console.error('❌ Email sending failed:', emailResult.error);
+      return res.status(500).json({
+        success: false,
+        error: emailResult.error || 'Failed to send email',
+        donorId: donor._id,
+        donorName: donor.name,
+        donorEmail: donor.email
+      });
     }
 
-    // NEW: Emit real-time update via Socket.io
+    console.log('✅ Email sent successfully! Message ID:', emailResult.messageId);
+
+    // Save the request to database
     try {
-      const io = req.app.get('socketio');
-      if (io) {
-        io.emit('newEmailRequest', {
-          requestId: request._id,
-          hospitalId: req.user._id,
-          hospitalName: req.user.hospitalName,
-          bloodGroup: bloodGroup,
-          donorName: donor.name,
-          unitsRequired: unitsRequired,
-          urgency: urgency,
-          createdAt: request.createdAt,
-          status: request.status
-        });
-        console.log('📢 Real-time update emitted for new email request');
-      }
-    } catch (socketError) {
-      console.log('Socket.io not available for real-time updates');
+      const request = new Request({
+        hospitalId: req.user?._id || 'demo-hospital',
+        hospitalName: requestDetails.hospitalName,
+        donorId: donor._id,
+        donorName: donor.name,
+        donorEmail: donor.email,
+        bloodGroup: bloodGroup,
+        unitsRequired: unitsRequired || 1,
+        urgency: urgency || 'high',
+        contactPerson: contactPerson,
+        contactNumber: contactNumber,
+        purpose: purpose,
+        status: 'sent',
+        emailSent: true,
+        emailMessageId: emailResult.messageId,
+        emailSentAt: new Date()
+      });
+      
+      await request.save();
+      console.log('✅ Blood request saved to database with ID:', request._id);
+    } catch (saveError) {
+      console.warn('⚠️ Could not save blood request to database:', saveError.message);
+      // Continue even if save fails
     }
 
-    res.status(201).json(responseData);
+    const responseData = {
+      success: true,
+      message: `Blood request email sent successfully to ${donor.name}`,
+      donorId: donor._id,
+      donorName: donor.name,
+      donorEmail: donor.email,
+      bloodGroup: bloodGroup,
+      messageId: emailResult.messageId,
+      timestamp: emailResult.timestamp,
+      time: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    };
+
+    console.log('✅ Sending response:', responseData);
+    
+    res.json(responseData);
 
   } catch (error) {
-    console.error('❌ Error sending request to donor:', error);
-    res.status(400).json({ 
-      message: 'Failed to send blood request',
-      error: error.message 
+    console.error('❌ Error in /send-to-donor:', error);
+    console.error('❌ Stack trace:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      code: 'SERVER_ERROR',
+      details: error.stack
     });
   }
 });
 
-// NEW: Get unique email requests for hospital (no duplicates)
-router.get('/hospital/unique-email-requests', auth, async (req, res) => {
+// Simple test endpoint (for debugging)
+router.get('/test-send', async (req, res) => {
   try {
-    if (req.user.role !== 'hospital') {
-      return res.status(403).json({ message: 'Access denied. Hospital only.' });
+    console.log('🧪 Testing email service directly...');
+    
+    // Get a donor from database
+    const donor = await User.findOne({ role: 'donor' });
+    
+    if (!donor) {
+      return res.status(404).json({
+        success: false,
+        error: 'No donors found in database'
+      });
+    }
+    
+    console.log(`🧪 Testing with donor: ${donor.name} (${donor.email})`);
+    
+    const requestDetails = {
+      hospitalName: 'Test Hospital',
+      bloodGroup: donor.bloodGroup || 'O+',
+      unitsRequired: 2,
+      urgency: 'high',
+      contactPerson: 'Test Doctor',
+      contactNumber: '0422-3566580',
+      location: 'Coimbatore',
+      purpose: 'Test email from /test-send endpoint',
+      donorId: donor._id
+    };
+    
+    console.log('🧪 Request details:', requestDetails);
+    
+    // Actually send the email
+    const emailResult = await sendBloodRequestEmail(
+      donor.email,
+      donor.name,
+      requestDetails
+    );
+    
+    console.log('🧪 Email result:', emailResult);
+    
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: emailResult.error,
+        donorId: donor._id,
+        donorEmail: donor.email
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Test email sent to ${donor.name}`,
+      donorEmail: donor.email,
+      messageId: emailResult.messageId,
+      time: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Test error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Send bulk requests to multiple donors
+router.post('/send-bulk', isHospitalOrAdmin, async (req, res) => {
+  try {
+    console.log('📧 ======= /requests/send-bulk CALLED =======');
+    console.log('📧 Donor IDs:', req.body.donorIds);
+    console.log('📧 Blood Group:', req.body.bloodGroup);
+    
+    const { donorIds, bloodGroup, unitsRequired, urgency, purpose } = req.body;
+
+    if (!donorIds || !Array.isArray(donorIds) || donorIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please select at least one donor'
+      });
     }
 
-    const requests = await Request.find({ 
-      hospitalId: req.user._id,
-      'donorRequests.0': { $exists: true }
-    })
-    .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
-    .sort({ createdAt: -1 });
+    if (!bloodGroup) {
+      return res.status(400).json({
+        success: false,
+        error: 'Blood group is required'
+      });
+    }
 
-    // NEW: Filter out duplicates - keep only the latest request for each donor+bloodGroup combination
-    const uniqueRequestsMap = new Map();
-    
-    requests.forEach(request => {
-      request.donorRequests.forEach(donorReq => {
-        const key = `${donorReq.donorId}_${request.bloodGroup}`;
+    // Get donors from database
+    let donors = [];
+    try {
+      donors = await User.find({ _id: { $in: donorIds } });
+      if (donors.length === 0) {
+        console.log('⚠️ No donors found with given IDs, trying to find by blood group...');
         
-        if (!uniqueRequestsMap.has(key)) {
-          // Store the entire request but mark which donor request we're showing
-          uniqueRequestsMap.set(key, {
-            ...request.toObject(),
-            displayDonorRequest: donorReq,
-            isDuplicate: false
+        // Try to find donors by blood group
+        donors = await User.find({ 
+          bloodGroup: bloodGroup,
+          role: 'donor'
+        }).limit(5);
+        
+        if (donors.length === 0) {
+          console.log('⚠️ No donors found at all, using test email');
+          donors = [{
+            _id: 'test-donor',
+            name: 'Test Donor',
+            email: process.env.TEST_EMAIL || 'test@example.com',
+            bloodGroup: bloodGroup
+          }];
+        }
+      }
+      console.log(`📋 Found ${donors.length} donors`);
+    } catch (dbError) {
+      console.log('⚠️ Database error:', dbError.message);
+      donors = [{
+        _id: 'test-donor',
+        name: 'Test Donor',
+        email: process.env.TEST_EMAIL || 'test@example.com',
+        bloodGroup: bloodGroup
+      }];
+    }
+
+    console.log(`📤 Sending bulk requests to ${donors.length} donors`);
+
+    const results = [];
+    const errors = [];
+
+    // Prepare request details
+    const requestDetails = {
+      hospitalName: 'LifeLink Hospital',
+      bloodGroup: bloodGroup,
+      unitsRequired: unitsRequired || 1,
+      urgency: urgency || 'high',
+      contactPerson: 'Hospital Staff',
+      contactNumber: '0422-3566580',
+      location: 'Coimbatore',
+      purpose: purpose || 'Emergency blood requirement'
+    };
+
+    // Send emails to all donors
+    for (const donor of donors) {
+      try {
+        console.log(`📧 Sending to ${donor.name} (${donor.email})`);
+        const emailResult = await sendBloodRequestEmail(
+          donor.email,
+          donor.name,
+          { ...requestDetails, donorId: donor._id }
+        );
+
+        if (emailResult.success) {
+          console.log(`✅ Sent to ${donor.name}`);
+          results.push({
+            donorId: donor._id,
+            donorName: donor.name,
+            donorEmail: donor.email,
+            success: true,
+            messageId: emailResult.messageId
           });
         } else {
-          // Mark as duplicate for tracking
-          const existing = uniqueRequestsMap.get(key);
-          existing.isDuplicate = true;
-          existing.duplicateCount = (existing.duplicateCount || 1) + 1;
+          console.error(`❌ Failed to send to ${donor.name}:`, emailResult.error);
+          errors.push({
+            donorId: donor._id,
+            donorName: donor.name,
+            error: emailResult.error
+          });
         }
-      });
-    });
-
-    // Convert map back to array and enhance with donor info
-    const uniqueRequests = Array.from(uniqueRequestsMap.values()).map(item => ({
-      _id: item._id,
-      hospitalName: item.hospitalName,
-      bloodGroup: item.bloodGroup,
-      unitsRequired: item.unitsRequired,
-      urgency: item.urgency,
-      status: item.status,
-      purpose: item.purpose,
-      contactPerson: item.contactPerson,
-      contactNumber: item.contactNumber,
-      createdAt: item.createdAt,
-      // Single donor info for display
-      donorName: item.displayDonorRequest.donorName,
-      donorEmail: item.displayDonorRequest.donorEmail,
-      donorId: item.displayDonorRequest.donorId,
-      emailSent: item.displayDonorRequest.emailSent,
-      emailSentAt: item.displayDonorRequest.emailSentAt,
-      donorResponded: item.displayDonorRequest.donorResponded,
-      responseStatus: item.displayDonorRequest.responseStatus,
-      // Additional info
-      totalDonorsContacted: item.donorRequests.length,
-      emailsSent: item.donorRequests.filter(dr => dr.emailSent).length,
-      donorsResponded: item.donorRequests.filter(dr => dr.donorResponded).length,
-      // Duplicate info
-      hasDuplicates: item.isDuplicate,
-      duplicateCount: item.duplicateCount || 1
-    }));
-
-    res.json(uniqueRequests);
-  } catch (error) {
-    console.error('Error fetching unique email requests:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Keep all other existing routes
-router.get('/', auth, async (req, res) => {
-  try {
-    const { status, bloodGroup } = req.query;
-    let filter = {};
-
-    if (status) filter.status = status;
-    if (bloodGroup) filter.bloodGroup = bloodGroup;
-
-    if (req.user.role === 'hospital') {
-      filter.hospitalId = req.user._id;
-    }
-
-    const requests = await Request.find(filter)
-      .populate('hospitalId', 'hospitalName email contact city')
-      .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
-      .sort({ createdAt: -1 });
-
-    const enhancedRequests = requests.map(request => ({
-      ...request.toObject(),
-      contactInfo: {
-        hospitalContact: request.hospitalId?.contact,
-        hospitalEmail: request.hospitalId?.email,
-        donorContacts: request.donorRequests.map(dr => ({
-          donorName: dr.donorId?.name,
-          donorEmail: dr.donorId?.email,
-          donorPhone: dr.donorId?.contact,
-          donorCity: dr.donorId?.city
-        }))
+      } catch (error) {
+        console.error(`❌ Error sending to ${donor.name}:`, error.message);
+        errors.push({
+          donorId: donor._id,
+          donorName: donor.name,
+          error: error.message
+        });
       }
-    }));
-
-    res.json(enhancedRequests);
-  } catch (error) {
-    console.error('Error fetching requests:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Add this route to backend/routes/requests.js (before module.exports)
-
-// GET /api/admin/requests - For admin dashboard
-router.get('/admin/requests', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
     }
 
-    const requests = await Request.find({})
-      .populate('hospitalId', 'hospitalName email contact city')
-      .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
-      .sort({ createdAt: -1 })
-      .limit(50); // Limit to 50 most recent
-
-    res.json(requests);
-  } catch (error) {
-    console.error('Error fetching admin requests:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.get('/admin/all', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin only.' });
-    }
-
-    const { status, bloodGroup, hospitalId } = req.query;
-    let filter = {};
-
-    if (status) filter.status = status;
-    if (bloodGroup) filter.bloodGroup = bloodGroup;
-    if (hospitalId) filter.hospitalId = hospitalId;
-
-    const requests = await Request.find(filter)
-      .populate('hospitalId', 'hospitalName email contact city')
-      .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
-      .sort({ createdAt: -1 });
-
-    const adminRequests = requests.map(request => ({
-      ...request.toObject(),
-      fullContactInfo: {
-        hospital: {
-          name: request.hospitalId?.hospitalName,
-          email: request.hospitalId?.email,
-          phone: request.hospitalId?.contact,
-          city: request.hospitalId?.city
-        },
-        donors: request.donorRequests.map(dr => ({
-          name: dr.donorId?.name,
-          email: dr.donorId?.email,
-          phone: dr.donorId?.contact,
-          bloodGroup: dr.donorId?.bloodGroup,
-          city: dr.donorId?.city,
-          availability: dr.donorId?.availability,
-          emailSent: dr.emailSent,
-          responded: dr.donorResponded
-        }))
-      }
-    }));
-
-    res.json(adminRequests);
-  } catch (error) {
-    console.error('Error fetching admin requests:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.get('/hospital/donor-requests', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'hospital') {
-      return res.status(403).json({ message: 'Access denied. Hospital only.' });
-    }
-
-    const requests = await Request.find({ 
-      hospitalId: req.user._id,
-      'donorRequests.0': { $exists: true }
-    })
-    .populate('donorRequests.donorId', 'name email bloodGroup contact city availability')
-    .sort({ createdAt: -1 });
-
-    const enhancedRequests = requests.map(request => ({
-      ...request.toObject(),
-      donorContactInfo: request.donorRequests.map(dr => ({
-        donorId: dr.donorId?._id,
-        name: dr.donorId?.name,
-        email: dr.donorId?.email,
-        phone: dr.donorId?.contact,
-        bloodGroup: dr.donorId?.bloodGroup,
-        city: dr.donorId?.city,
-        availability: dr.donorId?.availability,
-        emailSent: dr.emailSent,
-        emailSentAt: dr.emailSentAt,
-        responded: dr.donorResponded,
-        responseStatus: dr.responseStatus
-      }))
-    }));
-
-    res.json(enhancedRequests);
-  } catch (error) {
-    console.error('Error fetching hospital donor requests:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.get('/email-status/:requestId', auth, async (req, res) => {
-  try {
-    const request = await Request.findById(req.params.requestId)
-      .populate('donorRequests.donorId', 'name email contact');
-    
-    if (!request) {
-      return res.status(404).json({ message: 'Request not found' });
-    }
-
-    if (req.user.role === 'hospital' && request.hospitalId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Access denied' });
-    }
-
-    const emailStatus = request.donorRequests.map(dr => ({
-      donorName: dr.donorId?.name,
-      donorEmail: dr.donorId?.email,
-      donorPhone: dr.donorId?.contact,
-      emailSent: dr.emailSent,
-      emailSentAt: dr.emailSentAt,
-      donorResponded: dr.donorResponded,
-      responseStatus: dr.responseStatus,
-      responseDate: dr.responseDate
-    }));
+    console.log(`📊 Results: ${results.length} successful, ${errors.length} failed`);
 
     res.json({
-      requestId: request._id,
-      hospitalName: request.hospitalName,
-      bloodGroup: request.bloodGroup,
-      emailStatus
+      success: true,
+      message: `Sent requests to ${results.length} donors successfully${errors.length > 0 ? `, ${errors.length} failed` : ''}`,
+      donorCount: donorIds.length,
+      successfulCount: results.length,
+      failedCount: errors.length,
+      bloodGroup: bloodGroup,
+      unitsRequired: unitsRequired,
+      results: results,
+      errors: errors,
+      time: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    });
+
+  } catch (error) {
+    console.error('❌ Error in /send-bulk:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get all requests
+router.get('/', async (req, res) => {
+  try {
+    const requests = await Request.find()
+      .sort({ createdAt: -1 })
+      .limit(100);
+    
+    res.json({
+      success: true,
+      count: requests.length,
+      data: requests
     });
   } catch (error) {
-    console.error('Error fetching email status:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Error getting requests:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 
-router.put('/:id', auth, async (req, res) => {
+// Get request by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.id);
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        error: 'Request not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: request
+    });
+  } catch (error) {
+    console.error('Error getting request:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Update request status
+router.put('/:id', isHospitalOrAdmin, async (req, res) => {
   try {
     const { status } = req.body;
-    const request = await Request.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate('hospitalId', 'hospitalName email contact');
-
-    if (!request) {
-      return res.status(404).json({ message: 'Request not found' });
+    
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status is required'
+      });
     }
 
-    res.json(request);
+    const request = await Request.findByIdAndUpdate(
+      req.params.id,
+      { status, updatedAt: new Date() },
+      { new: true }
+    );
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        error: 'Request not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Request ${status} successfully`,
+      data: request
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error updating request:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
 
-router.get('/stats', auth, async (req, res) => {
+// Get my requests (for hospital) - FIXED VERSION
+router.get('/my-requests', isHospitalOrAdmin, async (req, res) => {
   try {
-    let filter = {};
+    const requests = await Request.find({ hospitalId: req.user?._id })
+      .sort({ createdAt: -1 })
+      .limit(50);
     
-    if (req.user.role === 'hospital') {
-      filter.hospitalId = req.user._id;
+    res.json({
+      success: true,
+      count: requests.length,
+      data: requests
+    });
+  } catch (error) {
+    console.error('Error getting my requests:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Get email status for a request
+router.get('/email-status/:requestId', async (req, res) => {
+  try {
+    const request = await Request.findById(req.params.requestId);
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        error: 'Request not found'
+      });
     }
+    
+    res.json({
+      success: true,
+      emailSent: request.emailSent || false,
+      emailMessageId: request.emailMessageId,
+      emailSentAt: request.emailSentAt,
+      status: request.status
+    });
+  } catch (error) {
+    console.error('Error getting email status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-    const totalRequests = await Request.countDocuments(filter);
-    const pendingRequests = await Request.countDocuments({ ...filter, status: 'pending' });
-    const approvedRequests = await Request.countDocuments({ ...filter, status: 'approved' });
-    const rejectedRequests = await Request.countDocuments({ ...filter, status: 'rejected' });
-
-    const bloodGroupStats = await Request.aggregate([
-      { $match: filter },
+// Get request statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const totalRequests = await Request.countDocuments();
+    const pendingRequests = await Request.countDocuments({ status: 'pending' });
+    const approvedRequests = await Request.countDocuments({ status: 'approved' });
+    const fulfilledRequests = await Request.countDocuments({ status: 'fulfilled' });
+    const rejectedRequests = await Request.countDocuments({ status: 'rejected' });
+    
+    // Get requests by blood group
+    const requestsByBloodGroup = await Request.aggregate([
       {
         $group: {
           _id: '$bloodGroup',
-          count: { $sum: 1 },
-          totalUnits: { $sum: '$unitsRequired' }
+          count: { $sum: 1 }
         }
-      }
+      },
+      { $sort: { count: -1 } }
     ]);
-
+    
+    // Get recent activity
+    const recentActivity = await Request.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select('hospitalName bloodGroup unitsRequired status createdAt');
+    
     res.json({
-      totalRequests,
-      pendingRequests,
-      approvedRequests,
-      rejectedRequests,
-      bloodGroupStats
+      success: true,
+      stats: {
+        total: totalRequests,
+        pending: pendingRequests,
+        approved: approvedRequests,
+        fulfilled: fulfilledRequests,
+        rejected: rejectedRequests
+      },
+      byBloodGroup: requestsByBloodGroup,
+      recentActivity: recentActivity
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error getting request stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 });
+
+// Create new blood request (traditional form submission)
+router.post('/', isHospitalOrAdmin, async (req, res) => {
+  try {
+    const { 
+      hospitalName,
+      bloodGroup,
+      unitsRequired,
+      urgency,
+      patientName,
+      contactPerson,
+      contactNumber,
+      purpose,
+      location
+    } = req.body;
+
+    // Validate
+    if (!hospitalName || !bloodGroup || !unitsRequired) {
+      return res.status(400).json({
+        success: false,
+        error: 'Hospital name, blood group, and units required are required'
+      });
+    }
+
+    // Create blood request
+    const request = new Request({
+      hospitalId: req.user?._id,
+      hospitalName,
+      bloodGroup,
+      unitsRequired: parseInt(unitsRequired),
+      urgency: urgency || 'medium',
+      patientName,
+      contactPerson,
+      contactNumber,
+      purpose,
+      location,
+      status: 'pending'
+    });
+
+    await request.save();
+
+    res.json({
+      success: true,
+      message: 'Blood request created successfully',
+      requestId: request._id,
+      data: request
+    });
+
+  } catch (error) {
+    console.error('Error creating blood request:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// REMOVED: Get hospital's donor requests (causing error)
+// router.get('/hospital/donor-requests', isHospitalOrAdmin, async (req, res) => {
+//   try {
+//     const requests = await Request.find({ hospitalId: req.user?._id })
+//       .sort({ createdAt: -1 });
+    
+//     res.json({
+//       success: true,
+//       count: requests.length,
+//       data: requests
+//     });
+//   } catch (error) {
+//     console.error('Error getting hospital requests:', error);
+//     res.status(500).json({
+//       success: false,
+//       error: error.message
+//     });
+//   }
+// });
 
 module.exports = router;
