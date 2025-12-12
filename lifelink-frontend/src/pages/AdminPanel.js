@@ -177,45 +177,46 @@ const AdminPanel = () => {
           <p>Complete system administration and management</p>
         </div>
         
-        <div className="admin-tabs">
-          <button 
-            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            📊 Dashboard
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => setActiveTab('users')}
-          >
-            👥 Users ({stats.totalDonors + stats.totalHospitals || 0})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'inventory' ? 'active' : ''}`}
-            onClick={() => setActiveTab('inventory')}
-          >
-            🩸 Inventory
-          </button>
-          <Link 
-            to="/admin/manage-requests"
-            className="tab-btn"
-            style={{ textDecoration: 'none', display: 'inline-block' }}
-          >
-            📋 Manage Requests ({stats.pendingRequests || 0})
-          </Link>
-          <button 
-            className={`tab-btn ${activeTab === 'donors' ? 'active' : ''}`}
-            onClick={() => setActiveTab('donors')}
-          >
-            🔍 Donors ({stats.totalDonors || 0})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'donations' ? 'active' : ''}`}
-            onClick={() => setActiveTab('donations')}
-          >
-            💉 Donations
-          </button>
-        </div>
+       // src/pages/AdminPanel.js - Just update the tab button section
+<div className="admin-tabs">
+  <button 
+    className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+    onClick={() => setActiveTab('dashboard')}
+  >
+    📊 Dashboard
+  </button>
+  <button 
+    className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+    onClick={() => setActiveTab('users')}
+  >
+    👥 Users ({stats.totalDonors + stats.totalHospitals || 0})
+  </button>
+  <button 
+    className={`tab-btn ${activeTab === 'inventory' ? 'active' : ''}`}
+    onClick={() => setActiveTab('inventory')}
+  >
+    🩸 Inventory
+  </button>
+  {/* CHANGE THIS TO BUTTON, NOT LINK - We'll handle navigation properly */}
+  <button 
+    className={`tab-btn ${activeTab === 'manage-requests' ? 'active' : ''}`}
+    onClick={() => window.location.href = '/admin/manage-requests'}
+  >
+    📋 Manage Requests ({stats.pendingRequests || 0})
+  </button>
+  <button 
+    className={`tab-btn ${activeTab === 'donors' ? 'active' : ''}`}
+    onClick={() => setActiveTab('donors')}
+  >
+    🔍 Donors ({stats.totalDonors || 0})
+  </button>
+  <button 
+    className={`tab-btn ${activeTab === 'donations' ? 'active' : ''}`}
+    onClick={() => setActiveTab('donations')}
+  >
+    💉 Donations
+  </button>
+</div>
 
         {loading ? (
           <div className="loading">Loading...</div>

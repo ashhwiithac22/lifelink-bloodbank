@@ -1,3 +1,4 @@
+//routes/admin.js
 const express = require('express');
 const User = require('../models/User');
 const Request = require('../models/Request');
@@ -175,6 +176,32 @@ router.delete('/users/:id', auth, async (req, res) => {
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Add this to backend/routes/admin.js - Before module.exports
+// Update request status
+router.put('/requests/:id/status', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied. Admin only.' });
+    }
+
+    const { status } = req.body;
+    const request = await Request.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    ).populate('hospitalId', 'hospitalName email contact');
+
+    if (!request) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    res.json(request);
+  } catch (error) {
+    console.error('Error updating request status:', error);
+    res.status(400).json({ message: error.message });
   }
 });
 

@@ -1,15 +1,16 @@
-//frontend/src/pages/AdminManageRequests.js
+// src/pages/AdminManageRequests.js
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { adminAPI, inventoryAPI } from '../services/api';
 
 const AdminManageRequests = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
-  const [urgentInventory, setUrgentInventory] = useState([]);
+  const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [activeTab, setActiveTab] = useState('all');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -24,20 +25,46 @@ const AdminManageRequests = () => {
 
   const loadData = async () => {
     try {
-      const [requestsResponse, inventoryResponse] = await Promise.all([
-        adminAPI.getRequests(),
-        inventoryAPI.getAll()
-      ]);
+      setLoading(true);
       
-      setRequests(requestsResponse.data);
+      // Fetch requests from admin API
+      const requestsResponse = await adminAPI.getRequests();
+      console.log('Requests response:', requestsResponse.data);
       
-      // Calculate urgent inventory (≤ 3 units)
-      const urgent = inventoryResponse.data.filter(item => item.unitsAvailable <= 3);
-      setUrgentInventory(urgent);
+      // Fetch inventory
+      const inventoryResponse = await inventoryAPI.getAll();
+      console.log('Inventory response:', inventoryResponse.data);
       
+      // Handle requests data
+      let requestsData = [];
+      if (requestsResponse.data) {
+        if (Array.isArray(requestsResponse.data)) {
+          requestsData = requestsResponse.data;
+        } else if (requestsResponse.data.data && Array.isArray(requestsResponse.data.data)) {
+          requestsData = requestsResponse.data.data;
+        }
+      }
+      
+      setRequests(requestsData);
+      
+      // Handle inventory data
+      let inventoryData = [];
+      if (inventoryResponse.data) {
+        if (Array.isArray(inventoryResponse.data)) {
+          inventoryData = inventoryResponse.data;
+        } else if (inventoryResponse.data.data && Array.isArray(inventoryResponse.data.data)) {
+          inventoryData = inventoryResponse.data.data;
+        }
+      }
+      
+      setInventory(inventoryData);
       setLastUpdate(new Date());
+      setError(null);
     } catch (error) {
       console.error('Error loading data:', error);
+      setError('Failed to load data. Please check console for details.');
+      setRequests([]);
+      setInventory([]);
     } finally {
       setLoading(false);
     }
@@ -45,22 +72,22 @@ const AdminManageRequests = () => {
 
   const handleUpdateRequestStatus = async (requestId, status) => {
     try {
-      await adminAPI.updateRequestStatus(requestId, status);
+      // First try adminAPI.updateRequestStatus, fallback to regular API
+      const response = await adminAPI.updateRequestStatus?.(requestId, status) || 
+                       fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/requests/${requestId}`, {
+                         method: 'PUT',
+                         headers: {
+                           'Content-Type': 'application/json',
+                           'Authorization': `Bearer ${localStorage.getItem('token')}`
+                         },
+                         body: JSON.stringify({ status })
+                       }).then(res => res.json());
+      
       alert(`Request ${status} successfully!`);
       loadData(); // Refresh data
     } catch (error) {
       console.error('Error updating request:', error);
-      alert('Error updating request: ' + error.response?.data?.message);
-    }
-  };
-
-  const handleNotifyHospitals = async (bloodGroup) => {
-    try {
-      await adminAPI.notifyHospitals(bloodGroup);
-      alert(`Notification sent to hospitals for ${bloodGroup} blood!`);
-    } catch (error) {
-      console.error('Error notifying hospitals:', error);
-      alert('Error sending notification: ' + error.response?.data?.message);
+      alert('Error updating request: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -71,7 +98,7 @@ const AdminManageRequests = () => {
       rejected: 'status-rejected',
       fulfilled: 'status-fulfilled'
     };
-    return <span className={`status-badge ${statusClasses[status]}`}>{status}</span>;
+    return <span className={`status-badge ${statusClasses[status] || ''}`}>{status}</span>;
   };
 
   const getUrgencyBadge = (urgency) => {
@@ -80,7 +107,7 @@ const AdminManageRequests = () => {
       medium: 'urgency-medium',
       high: 'urgency-high'
     };
-    return <span className={`urgency-badge ${urgencyClasses[urgency]}`}>{urgency}</span>;
+    return <span className={`urgency-badge ${urgencyClasses[urgency] || ''}`}>{urgency}</span>;
   };
 
   const getStockLevel = (units) => {
@@ -89,14 +116,24 @@ const AdminManageRequests = () => {
     return 'good';
   };
 
+  // Filter requests based on active tab
   const filteredRequests = requests.filter(request => {
     if (activeTab === 'all') return true;
-    if (activeTab === 'urgent') return request.isAuto || request.urgency === 'high';
-    if (activeTab === 'auto') return request.isAuto;
-    return request.status === activeTab;
+    if (activeTab === 'pending') return request.status === 'pending';
+    if (activeTab === 'approved') return request.status === 'approved';
+    if (activeTab === 'rejected') return request.status === 'rejected';
+    if (activeTab === 'fulfilled') return request.status === 'fulfilled';
+    return true;
   });
 
-  if (loading) return <div className="loading">Loading requests...</div>;
+  const criticalInventory = inventory.filter(item => item && item.unitsAvailable <= 3);
+
+  if (loading) return (
+    <div className="loading-screen">
+      <div className="spinner"></div>
+      <p>Loading requests...</p>
+    </div>
+  );
 
   return (
     <div className="admin-manage-requests">
@@ -104,731 +141,511 @@ const AdminManageRequests = () => {
         {/* Header */}
         <div className="page-header">
           <div className="header-content">
-            <h1>🛠️ Manage Blood Requests</h1>
+            <h1>📋 Manage Blood Requests</h1>
             <p>Approve, reject, and monitor all blood requests in the system</p>
-            <div className="connection-status connected">
-              🔄 Auto-update active (30s) • Last updated: {lastUpdate.toLocaleTimeString()}
+            
+            {error && (
+              <div className="alert alert-danger">
+                ⚠️ {error}
+              </div>
+            )}
+            
+            <div className="connection-status">
+              🔄 Auto-update active • Last updated: {lastUpdate.toLocaleTimeString()}
             </div>
           </div>
+          
           <div className="header-actions">
             <button 
-              className="refresh-btn"
+              className="btn btn-primary"
               onClick={loadData}
-              title="Refresh data"
+              disabled={loading}
             >
-              🔄 Refresh
+              {loading ? 'Refreshing...' : '🔄 Refresh'}
+            </button>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => navigate('/admin')}
+            >
+              ← Back to Admin Panel
             </button>
           </div>
         </div>
 
+        {/* Critical Inventory Alert */}
+        {criticalInventory.length > 0 && (
+          <div className="alert alert-warning">
+            <h4>🚨 Critical Stock Alert</h4>
+            <p>The following blood groups are running low:</p>
+            <div className="critical-stocks">
+              {criticalInventory.map(item => (
+                <span key={item.bloodGroup} className="critical-stock-item">
+                  {item.bloodGroup}: {item.unitsAvailable} units
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
-        <div className="admin-tabs">
+        <div className="request-tabs">
           <button 
-            className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+            className={`tab ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => setActiveTab('all')}
           >
-            📋 All Requests ({requests.length})
+            All Requests ({requests.length})
           </button>
           <button 
-            className={`tab-btn ${activeTab === 'urgent' ? 'active' : ''}`}
-            onClick={() => setActiveTab('urgent')}
-          >
-            🚨 Urgent ({requests.filter(r => r.isAuto || r.urgency === 'high').length})
-          </button>
-          <button 
-            className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
+            className={`tab ${activeTab === 'pending' ? 'active' : ''}`}
             onClick={() => setActiveTab('pending')}
           >
-            ⏳ Pending ({requests.filter(r => r.status === 'pending').length})
+            Pending ({requests.filter(r => r.status === 'pending').length})
           </button>
           <button 
-            className={`tab-btn ${activeTab === 'auto' ? 'active' : ''}`}
-            onClick={() => setActiveTab('auto')}
+            className={`tab ${activeTab === 'approved' ? 'active' : ''}`}
+            onClick={() => setActiveTab('approved')}
           >
-            🤖 Auto-Generated ({requests.filter(r => r.isAuto).length})
+            Approved ({requests.filter(r => r.status === 'approved').length})
+          </button>
+          <button 
+            className={`tab ${activeTab === 'rejected' ? 'active' : ''}`}
+            onClick={() => setActiveTab('rejected')}
+          >
+            Rejected ({requests.filter(r => r.status === 'rejected').length})
+          </button>
+          <button 
+            className={`tab ${activeTab === 'fulfilled' ? 'active' : ''}`}
+            onClick={() => setActiveTab('fulfilled')}
+          >
+            Fulfilled ({requests.filter(r => r.status === 'fulfilled').length})
           </button>
         </div>
 
-        <div className="admin-content-grid">
-          {/* Left Column - Requests */}
-          <div className="requests-column">
-            <div className="section-card">
-              <div className="card-header">
-                <h2>📋 Blood Requests</h2>
-                <span className="badge">{filteredRequests.length} requests</span>
-              </div>
-
-              <div className="requests-list">
-                {filteredRequests.length > 0 ? (
-                  filteredRequests.map(request => (
-                    <div key={request._id} className={`request-card ${request.isAuto ? 'auto-request' : ''}`}>
-                      <div className="request-header">
-                        <div className="request-title">
-                          <h4>
-                            {request.hospitalName} 
-                            {request.isAuto && <span className="auto-badge">🤖 Auto</span>}
-                          </h4>
-                          <div className="request-meta">
-                            <span className="blood-type">{request.bloodGroup}</span>
-                            <span>{request.unitsRequired} unit(s)</span>
-                            {getUrgencyBadge(request.urgency)}
-                          </div>
-                        </div>
-                        <div className="request-status">
-                          {getStatusBadge(request.status)}
-                          {request.hasDuplicates && (
-                            <div className="duplicate-warning" title="This request has duplicates">
-                              ⚠️
-                            </div>
-                          )}
-                        </div>
+        {/* Requests Table */}
+        <div className="requests-table-container">
+          {filteredRequests.length === 0 ? (
+            <div className="no-requests">
+              <p>No requests found for the selected filter.</p>
+            </div>
+          ) : (
+            <table className="requests-table">
+              <thead>
+                <tr>
+                  <th>Request ID</th>
+                  <th>Hospital</th>
+                  <th>Blood Group</th>
+                  <th>Units</th>
+                  <th>Urgency</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRequests.map(request => (
+                  <tr key={request._id} className={`request-row status-${request.status}`}>
+                    <td className="request-id">
+                      {request._id.substring(0, 8)}...
+                    </td>
+                    <td className="hospital-info">
+                      <div className="hospital-name">
+                        {request.hospitalId?.hospitalName || request.hospitalName || 'Unknown Hospital'}
                       </div>
-                      
-                      <div className="request-details">
-                        <div className="detail-grid">
-                          <div className="detail-item">
-                            <strong>Hospital:</strong>
-                            <span>{request.hospitalName}</span>
-                          </div>
-                          <div className="detail-item">
-                            <strong>Contact:</strong>
-                            <span>{request.contactPerson} • {request.contactNumber}</span>
-                          </div>
-                          <div className="detail-item">
-                            <strong>City:</strong>
-                            <span>{request.city}</span>
-                          </div>
-                          <div className="detail-item">
-                            <strong>Purpose:</strong>
-                            <span>{request.purpose}</span>
-                          </div>
-                          {request.donorName && (
-                            <div className="detail-item">
-                              <strong>Donor:</strong>
-                              <span>{request.donorName} • {request.donorEmail}</span>
-                            </div>
-                          )}
-                          <div className="detail-item">
-                            <strong>Requested:</strong>
-                            <span>{new Date(request.createdAt).toLocaleString()}</span>
-                          </div>
-                        </div>
+                      <div className="hospital-contact">
+                        {request.hospitalId?.contact || 'No contact'}
                       </div>
-
-                      <div className="request-actions">
-                        {request.status === 'pending' && (
-                          <>
-                            <button 
-                              onClick={() => handleUpdateRequestStatus(request._id, 'approved')}
-                              className="btn btn-success"
-                            >
-                              ✅ Approve
-                            </button>
-                            <button 
-                              onClick={() => handleUpdateRequestStatus(request._id, 'rejected')}
-                              className="btn btn-danger"
-                            >
-                              ❌ Reject
-                            </button>
-                          </>
-                        )}
-                        {request.status === 'approved' && (
+                    </td>
+                    <td className="blood-group">
+                      <span className="blood-type-badge">{request.bloodGroup}</span>
+                    </td>
+                    <td className="units-required">
+                      {request.unitsRequired}
+                    </td>
+                    <td className="urgency">
+                      {getUrgencyBadge(request.urgency || 'medium')}
+                    </td>
+                    <td className="status">
+                      {getStatusBadge(request.status)}
+                    </td>
+                    <td className="request-date">
+                      {new Date(request.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="actions">
+                      {request.status === 'pending' && (
+                        <>
                           <button 
-                            onClick={() => handleUpdateRequestStatus(request._id, 'fulfilled')}
-                            className="btn btn-info"
+                            className="btn btn-success btn-sm"
+                            onClick={() => handleUpdateRequestStatus(request._id, 'approved')}
                           >
-                            ✅ Mark Fulfilled
+                            Approve
                           </button>
-                        )}
-                        {(request.status === 'rejected' || request.status === 'fulfilled') && (
-                          <span className="action-complete">
-                            Request {request.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">📋</div>
-                    <h3>No requests found</h3>
-                    <p>No blood requests match your current filters.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+                          <button 
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleUpdateRequestStatus(request._id, 'rejected')}
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {request.status === 'approved' && (
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          onClick={() => handleUpdateRequestStatus(request._id, 'fulfilled')}
+                        >
+                          Mark as Fulfilled
+                        </button>
+                      )}
+                      <button 
+                        className="btn btn-info btn-sm"
+                        onClick={() => navigate(`/requests/${request._id}`)}
+                      >
+                        View Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-          {/* Right Column - Urgent Inventory */}
-          <div className="inventory-column">
-            {/* Urgent Inventory Alert */}
-            <div className="section-card urgent-inventory">
-              <div className="card-header">
-                <h2>🚨 Urgent Inventory</h2>
-                <span className="badge critical">{urgentInventory.length} critical</span>
+        {/* Statistics */}
+        <div className="request-stats">
+          <div className="stat-card">
+            <h4>📊 Request Statistics</h4>
+            <div className="stats-grid">
+              <div className="stat-item">
+                <span className="stat-label">Total Requests:</span>
+                <span className="stat-value">{requests.length}</span>
               </div>
-
-              <div className="inventory-list">
-                {urgentInventory.length > 0 ? (
-                  urgentInventory.map(item => (
-                    <div key={item.bloodGroup} className={`inventory-item ${getStockLevel(item.unitsAvailable)}`}>
-                      <div className="inventory-info">
-                        <div className="blood-group">{item.bloodGroup}</div>
-                        <div className="units-available">
-                          {item.unitsAvailable} unit(s) available
-                        </div>
-                        <div className="stock-status">
-                          {getStockLevel(item.unitsAvailable).toUpperCase()}
-                        </div>
-                      </div>
-                      <div className="inventory-actions">
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">
-                    <div className="empty-icon">✅</div>
-                    <h3>Inventory Stable</h3>
-                    <p>All blood groups have sufficient stock.</p>
-                  </div>
-                )}
+              <div className="stat-item">
+                <span className="stat-label">Pending:</span>
+                <span className="stat-value">{requests.filter(r => r.status === 'pending').length}</span>
               </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="section-card quick-stats">
-              <div className="card-header">
-                <h2>📊 Quick Stats</h2>
+              <div className="stat-item">
+                <span className="stat-label">Approved:</span>
+                <span className="stat-value">{requests.filter(r => r.status === 'approved').length}</span>
               </div>
-              <div className="stats-grid">
-                <div className="stat-item">
-                  <div className="stat-number">{requests.length}</div>
-                  <div className="stat-label">Total Requests</div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-number">{requests.filter(r => r.status === 'pending').length}</div>
-                  <div className="stat-label">Pending</div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-number">{requests.filter(r => r.isAuto).length}</div>
-                  <div className="stat-label">Auto-Generated</div>
-                </div>
-                <div className="stat-item">
-                  <div className="stat-number">{urgentInventory.length}</div>
-                  <div className="stat-label">Critical Stock</div>
-                </div>
+              <div className="stat-item">
+                <span className="stat-label">Fulfilled:</span>
+                <span className="stat-value">{requests.filter(r => r.status === 'fulfilled').length}</span>
               </div>
-            </div>
-
-            {/* System Info */}
-            <div className="section-card system-info">
-              <div className="card-header">
-                <h2>ℹ️ System Info</h2>
-              </div>
-              <div className="info-list">
-                <div className="info-item">
-                  <strong>Auto-Requests:</strong>
-                  <span>Generated when inventory ≤ 3 units</span>
-                </div>
-                <div className="info-item">
-                  <strong>Deduplication:</strong>
-                  <span>Same hospital+donor+blood group combined</span>
-                </div>
-                <div className="info-item">
-                  <strong>Real-time Updates:</strong>
-                  <span>Auto-refresh every 30 seconds</span>
-                </div>
-                <div className="info-item">
-                  <strong>Critical Threshold:</strong>
-                  <span>≤ 3 units triggers alerts</span>
-                </div>
+              <div className="stat-item">
+                <span className="stat-label">Rejected:</span>
+                <span className="stat-value">{requests.filter(r => r.status === 'rejected').length}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* CSS Styles */}
       <style jsx>{`
         .admin-manage-requests {
-          padding: 20px 0;
-          min-height: 100vh;
+          padding: 20px;
           background: #f8f9fa;
+          min-height: 100vh;
         }
-
+        
+        .container {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        
         .page-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
           margin-bottom: 30px;
-          background: white;
-          padding: 25px;
-          border-radius: 12px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          flex-wrap: wrap;
+          gap: 20px;
         }
-
+        
         .header-content h1 {
-          margin: 0 0 10px 0;
-          color: #2c3e50;
+          color: #dc3545;
+          margin-bottom: 10px;
         }
-
+        
         .header-content p {
-          margin: 0 0 10px 0;
-          color: #7f8c8d;
+          color: #666;
+          margin-bottom: 10px;
         }
-
+        
         .connection-status {
-          font-size: 14px;
-          color: #27ae60;
-          background: #d5f4e6;
+          background: #e7f3ff;
           padding: 8px 12px;
           border-radius: 6px;
           display: inline-block;
+          font-size: 14px;
+          color: #0066cc;
         }
-
-        .refresh-btn {
-          background: #3498db;
-          color: white;
+        
+        .header-actions {
+          display: flex;
+          gap: 10px;
+        }
+        
+        .btn {
+          padding: 10px 20px;
           border: none;
-          padding: 10px 16px;
           border-radius: 6px;
           cursor: pointer;
-          font-weight: bold;
-        }
-
-        .refresh-btn:hover {
-          background: #2980b9;
-        }
-
-        .admin-tabs {
-          display: flex;
-          gap: 10px;
-          margin-bottom: 30px;
-          flex-wrap: wrap;
-        }
-
-        .tab-btn {
-          background: white;
-          border: 2px solid #e9ecef;
-          padding: 12px 20px;
-          border-radius: 8px;
-          cursor: pointer;
           font-weight: 500;
-          transition: all 0.2s;
+          transition: all 0.3s;
         }
-
-        .tab-btn.active {
-          background: #3498db;
-          color: white;
-          border-color: #3498db;
-        }
-
-        .tab-btn:hover:not(.active) {
-          border-color: #3498db;
-        }
-
-        .admin-content-grid {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 30px;
-        }
-
-        .section-card {
-          background: white;
-          border-radius: 12px;
-          padding: 25px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-          margin-bottom: 25px;
-        }
-
-        .card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-          padding-bottom: 15px;
-          border-bottom: 2px solid #f8f9fa;
-        }
-
-        .card-header h2 {
-          margin: 0;
-          color: #2c3e50;
-          font-size: 1.4rem;
-        }
-
-        .badge {
-          background: #e9ecef;
-          color: #6c757d;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: bold;
-        }
-
-        .badge.critical {
-          background: #f8d7da;
-          color: #721c24;
-        }
-
-        .request-card {
-          border: 2px solid #e9ecef;
-          border-radius: 10px;
-          padding: 20px;
-          margin-bottom: 20px;
-          transition: all 0.2s;
-        }
-
-        .request-card:hover {
-          border-color: #3498db;
-          box-shadow: 0 4px 12px rgba(52, 152, 219, 0.1);
-        }
-
-        .request-card.auto-request {
-          border-left: 4px solid #e74c3c;
-          background: #fff5f5;
-        }
-
-        .request-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 15px;
-        }
-
-        .request-title h4 {
-          margin: 0 0 8px 0;
-          color: #2c3e50;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .auto-badge {
-          background: #e74c3c;
-          color: white;
-          padding: 2px 8px;
-          border-radius: 12px;
-          font-size: 10px;
-          font-weight: bold;
-        }
-
-        .request-meta {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-        }
-
-        .blood-type {
+        
+        .btn-primary {
           background: #dc3545;
           color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-weight: bold;
-          font-size: 12px;
         }
-
-        .status-badge {
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: bold;
-          text-transform: capitalize;
+        
+        .btn-primary:hover {
+          background: #c82333;
         }
-
-        .status-pending {
-          background: #fff3cd;
-          color: #856404;
+        
+        .btn-secondary {
+          background: #6c757d;
+          color: white;
         }
-
-        .status-approved {
-          background: #d1ecf1;
-          color: #0c5460;
+        
+        .btn-secondary:hover {
+          background: #545b62;
         }
-
-        .status-rejected {
-          background: #f8d7da;
-          color: #721c24;
-        }
-
-        .status-fulfilled {
-          background: #d4edda;
-          color: #155724;
-        }
-
-        .urgency-badge {
-          padding: 4px 8px;
-          border-radius: 12px;
-          font-size: 10px;
-          font-weight: bold;
-          text-transform: capitalize;
-        }
-
-        .urgency-low {
-          background: #d4edda;
-          color: #155724;
-        }
-
-        .urgency-medium {
-          background: #fff3cd;
-          color: #856404;
-        }
-
-        .urgency-high {
-          background: #f8d7da;
-          color: #721c24;
-        }
-
-        .duplicate-warning {
-          color: #e74c3c;
-          font-size: 14px;
-          cursor: help;
-        }
-
-        .detail-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 15px;
-        }
-
-        .detail-item {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .detail-item strong {
-          color: #6c757d;
-          font-size: 12px;
-        }
-
-        .detail-item span {
-          color: #2c3e50;
-          font-weight: 500;
-        }
-
-        .request-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .btn {
-          padding: 8px 16px;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.2s;
-        }
-
+        
         .btn-success {
           background: #28a745;
           color: white;
         }
-
-        .btn-success:hover {
-          background: #218838;
-        }
-
+        
         .btn-danger {
           background: #dc3545;
           color: white;
         }
-
-        .btn-danger:hover {
-          background: #c82333;
-        }
-
+        
         .btn-info {
           background: #17a2b8;
           color: white;
         }
-
-        .btn-info:hover {
-          background: #138496;
-        }
-
-        .btn-warning {
-          background: #ffc107;
-          color: #212529;
-        }
-
-        .btn-warning:hover {
-          background: #e0a800;
-        }
-
+        
         .btn-sm {
-          padding: 6px 12px;
+          padding: 5px 10px;
           font-size: 12px;
+          margin-right: 5px;
         }
-
-        .action-complete {
-          color: #6c757d;
-          font-style: italic;
-          padding: 8px 0;
-        }
-
-        .urgent-inventory {
-          border-left: 4px solid #e74c3c;
-        }
-
-        .inventory-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+        
+        .alert {
           padding: 15px;
-          margin-bottom: 12px;
-          border-radius: 8px;
-          border: 1px solid #e9ecef;
+          border-radius: 6px;
+          margin-bottom: 20px;
         }
-
-        .inventory-item.critical {
-          background: #f8d7da;
-          border-color: #f5c6cb;
-        }
-
-        .inventory-item.low {
+        
+        .alert-warning {
           background: #fff3cd;
-          border-color: #ffeaa7;
+          border-left: 4px solid #ffc107;
+          color: #856404;
         }
-
-        .inventory-info {
+        
+        .alert-danger {
+          background: #f8d7da;
+          border-left: 4px solid #dc3545;
+          color: #721c24;
+        }
+        
+        .critical-stocks {
           display: flex;
-          align-items: center;
-          gap: 15px;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 10px;
         }
-
-        .blood-group {
-          font-size: 18px;
-          font-weight: bold;
-          color: #dc3545;
-          min-width: 40px;
+        
+        .critical-stock-item {
+          background: #dc3545;
+          color: white;
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-size: 14px;
         }
-
-        .units-available {
-          color: #2c3e50;
-          font-weight: 500;
+        
+        .request-tabs {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
         }
-
-        .stock-status {
-          padding: 4px 8px;
-          border-radius: 12px;
-          font-size: 10px;
-          font-weight: bold;
-          text-transform: uppercase;
+        
+        .tab {
+          padding: 10px 20px;
+          background: #e9ecef;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.3s;
         }
-
-        .inventory-item.critical .stock-status {
+        
+        .tab.active {
           background: #dc3545;
           color: white;
         }
-
-        .inventory-item.low .stock-status {
-          background: #ffc107;
-          color: #212529;
-        }
-
-        .quick-stats .stats-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 15px;
-        }
-
-        .stat-item {
-          text-align: center;
-          padding: 15px;
-          background: #f8f9fa;
+        
+        .requests-table-container {
+          background: white;
           border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          overflow: hidden;
+          margin-bottom: 30px;
         }
-
-        .stat-number {
-          font-size: 24px;
-          font-weight: bold;
-          color: #3498db;
-          margin-bottom: 5px;
+        
+        .requests-table {
+          width: 100%;
+          border-collapse: collapse;
         }
-
-        .stat-label {
+        
+        .requests-table th {
+          background: #f8f9fa;
+          padding: 15px;
+          text-align: left;
+          border-bottom: 2px solid #dee2e6;
+          font-weight: 600;
+        }
+        
+        .requests-table td {
+          padding: 15px;
+          border-bottom: 1px solid #dee2e6;
+        }
+        
+        .request-row:hover {
+          background: #f8f9fa;
+        }
+        
+        .request-id {
+          font-family: monospace;
+          color: #666;
+        }
+        
+        .hospital-name {
+          font-weight: 600;
+        }
+        
+        .hospital-contact {
           font-size: 12px;
-          color: #6c757d;
-          text-transform: uppercase;
-          font-weight: 500;
+          color: #666;
         }
-
-        .system-info .info-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
+        
+        .blood-type-badge {
+          background: #dc3545;
+          color: white;
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-weight: 600;
         }
-
-        .info-item {
+        
+        .status-badge {
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        
+        .status-pending {
+          background: #ffc107;
+          color: #856404;
+        }
+        
+        .status-approved {
+          background: #28a745;
+          color: white;
+        }
+        
+        .status-rejected {
+          background: #dc3545;
+          color: white;
+        }
+        
+        .status-fulfilled {
+          background: #17a2b8;
+          color: white;
+        }
+        
+        .urgency-badge {
+          padding: 5px 10px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+        
+        .urgency-low {
+          background: #28a745;
+          color: white;
+        }
+        
+        .urgency-medium {
+          background: #ffc107;
+          color: #856404;
+        }
+        
+        .urgency-high {
+          background: #dc3545;
+          color: white;
+        }
+        
+        .no-requests {
+          text-align: center;
+          padding: 40px;
+          color: #666;
+        }
+        
+        .request-stats {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .stats-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+          gap: 15px;
+          margin-top: 15px;
+        }
+        
+        .stat-item {
           display: flex;
           justify-content: space-between;
+          padding: 10px;
+          background: #f8f9fa;
+          border-radius: 6px;
+        }
+        
+        .stat-label {
+          color: #666;
+        }
+        
+        .stat-value {
+          font-weight: 600;
+          color: #dc3545;
+        }
+        
+        .loading-screen {
+          display: flex;
+          flex-direction: column;
           align-items: center;
-          padding: 10px 0;
-          border-bottom: 1px solid #f8f9fa;
+          justify-content: center;
+          height: 60vh;
         }
-
-        .info-item:last-child {
-          border-bottom: none;
+        
+        .spinner {
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #dc3545;
+          border-radius: 50%;
+          width: 50px;
+          height: 50px;
+          animation: spin 1s linear infinite;
+          margin-bottom: 20px;
         }
-
-        .info-item strong {
-          color: #2c3e50;
-          font-size: 14px;
-        }
-
-        .info-item span {
-          color: #6c757d;
-          font-size: 12px;
-          text-align: right;
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 40px 20px;
-          color: #6c757d;
-        }
-
-        .empty-icon {
-          font-size: 48px;
-          margin-bottom: 16px;
-        }
-
-        .empty-state h3 {
-          margin: 0 0 10px 0;
-          color: #6c757d;
-        }
-
-        .empty-state p {
-          margin: 0;
-          font-size: 14px;
-        }
-
-        @media (max-width: 768px) {
-          .admin-content-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .page-header {
-            flex-direction: column;
-            gap: 15px;
-          }
-          
-          .detail-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .request-header {
-            flex-direction: column;
-            gap: 10px;
-          }
-          
-          .admin-tabs {
-            overflow-x: auto;
-            padding-bottom: 10px;
-          }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>
