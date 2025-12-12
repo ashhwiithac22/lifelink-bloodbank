@@ -1,14 +1,9 @@
+//src/services/api.js
 import axios from 'axios';
 
-// CRITICAL: Debug the environment variables
-console.log('=== ENVIRONMENT DEBUG ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
-console.log('=========================');
-
-// FORCE LOCALHOST FOR NOW
-let API_URL = 'http://localhost:5000/api';
-console.log('🌍 FORCING LOCALHOST:', API_URL);
+// FORCE LOCALHOST FOR TESTING
+const API_URL = 'http://localhost:5000/api';
+console.log('🔗 Using API URL:', API_URL);
 
 // Create axios instance
 const api = axios.create({
@@ -16,40 +11,33 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // Increased timeout for email operations
+  timeout: 30000,
 });
 
-// Request interceptor - Log all requests
+// Add token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log(`📡 Request to: ${config.url} (with token)`);
+    } else {
+      console.log(`📡 Request to: ${config.url} (no token)`);
     }
-    
-    // Log request details
-    console.log(`📡 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-    
     return config;
   },
-  (error) => {
-    console.error('❌ Request interceptor error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor - Log all responses
+// Handle responses
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response ${response.status}: ${response.config.url}`);
+    console.log(`✅ Response ${response.status}: ${response.config.url}`);
     return response;
   },
   (error) => {
-    console.error('❌ API Error Details:');
-    console.error('Error Message:', error.message);
-    console.error('Request URL:', error.config?.url);
-    console.error('Status Code:', error.response?.status);
-    console.error('Response Data:', error.response?.data);
+    console.error(`❌ Error ${error.response?.status}: ${error.config?.url}`);
+    console.error('Error details:', error.response?.data);
     
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
@@ -61,25 +49,12 @@ api.interceptors.response.use(
   }
 );
 
-// Test backend connection on startup
-const testBackendConnection = async () => {
-  try {
-    console.log('🔧 Testing backend connection...');
-    const response = await api.get('/health');
-    console.log('✅ Backend connection successful:', response.data);
-    return true;
-  } catch (error) {
-    console.error('❌ Backend connection failed:', error.message);
-    return false;
-  }
-};
-
-// Run connection test
-testBackendConnection();
-
 // ========== AUTH API ==========
 export const authAPI = {
-  login: (credentials) => api.post('/auth/login', credentials),
+  login: (credentials) => {
+    console.log('🔑 Login attempt:', credentials.email);
+    return api.post('/auth/login', credentials);
+  },
   register: (userData) => api.post('/auth/register', userData),
   getMe: () => api.get('/auth/me'),
 };
@@ -89,51 +64,46 @@ export const donorsAPI = {
   getAll: (filters = {}) => api.get('/donors', { params: filters }),
   updateAvailability: (availability) => api.put('/donors/availability', { availability }),
   getProfile: () => api.get('/donors/profile'),
-  getStats: () => api.get('/donors/stats'),
 };
 
 // ========== REQUESTS API ==========
 export const requestsAPI = {
   create: (requestData) => api.post('/requests', requestData),
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
-  getAdminAll: (filters = {}) => api.get('/requests/admin/all', { params: filters }),
   updateStatus: (id, status) => api.put(`/requests/${id}`, { status }),
-  getStats: () => api.get('/requests/stats'),
-  search: (filters = {}) => api.get('/requests/search', { params: filters }),
   
-  // Email functions - USE EXISTING ENDPOINTS
-  sendToDonor: (data) => api.post('/requests/send-to-donor', data),
-  sendBulkRequests: (data) => api.post('/requests/send-bulk', data),
+  // EMAIL ENDPOINTS - THESE WORK
+  sendToDonor: (data) => {
+    console.log('📧 Sending to donor:', data);
+    return api.post('/requests/send-to-donor', data);
+  },
+  
+  sendBulkRequests: (data) => {
+    console.log('📧 Sending bulk to:', data.donorIds?.length || 0, 'donors');
+    return api.post('/requests/send-bulk', data);
+  },
+  
   getHospitalDonorRequests: () => api.get('/requests/hospital/donor-requests'),
   getMyRequests: () => api.get('/requests/my-requests'),
-  getDonorRequests: () => api.get('/requests/donor/my-requests'),
-  getHospitalUniqueEmailRequests: () => api.get('/requests/hospital/unique-email-requests'),
-  getEmailStatus: (requestId) => api.get(`/requests/email-status/${requestId}`),
   getRequests: () => api.get('/requests'),
 };
 
 // ========== INVENTORY API ==========
 export const inventoryAPI = {
-  // Gets simple array response
   getAll: () => {
     console.log('🩸 Fetching inventory...');
     return api.get('/inventory/simple')
       .then(response => {
-        console.log('✅ Inventory data received:', response.data);
-        return { data: Array.isArray(response.data) ? response.data : [] };
+        console.log('✅ Inventory data:', response.data.length, 'items');
+        return { data: response.data };
       })
       .catch(error => {
-        console.error('❌ Inventory fetch error:', error);
+        console.error('❌ Inventory error:', error);
         return { data: [] };
       });
   },
-  
   getSimple: () => api.get('/inventory/simple'),
-  getWithStats: () => api.get('/inventory/stats'),
   update: (data) => api.put('/inventory/update', data),
-  adjust: (data) => api.put('/inventory/adjust', data),
-  getStats: () => api.get('/inventory/stats'),
-  getDashboardStats: () => api.get('/inventory/dashboard-stats'),
   getCriticalStocks: () => api.get('/inventory/critical'),
 };
 
@@ -142,55 +112,44 @@ export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getUsers: () => api.get('/admin/users'),
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
-  getRequests: () => api.get('/admin/requests'),
-  getDashboardStats: () => api.get('/admin/dashboard-stats'),
-  getUserCounts: () => api.get('/admin/user-counts'),
+  getRequests: () => api.get('/admin/requests'), // This exists in backend/routes/admin.js
+  updateRequestStatus: (id, status) => api.put(`/admin/requests/${id}/status`, { status }), // Add this if needed
+
 };
 
 // ========== DONATIONS API ==========
 export const donationsAPI = {
   create: (donationData) => api.post('/donations', donationData),
   getAll: (filters = {}) => api.get('/donations', { params: filters }),
-  getStats: () => api.get('/donations/stats'),
 };
 
-// ========== ANALYTICS API ==========
-export const analyticsAPI = {
-  getDashboard: () => api.get('/analytics/dashboard'),
-  exportData: (type) => api.get(`/analytics/export?type=${type}`),
-};
-
-// ========== EMAIL API - SIMPLIFIED ==========
+// ========== EMAIL API ==========
 export const emailAPI = {
-  // Test email (already works!)
-  sendTest: (email) => api.get(`/test-email?email=${email}`),
+  // TEST EMAIL - WORKS
+  sendTest: (email) => {
+    console.log('📧 Sending test email to:', email);
+    return api.get(`/test-email?email=${email}`);
+  },
   
-  // Custom email (use existing endpoint)
-  sendCustom: (data) => api.post('/email/send-test', data),
+  // CUSTOM EMAIL - WORKS
+  sendCustom: (data) => {
+    console.log('📧 Sending custom email:', data);
+    return api.post('/email/send-test', data);
+  },
   
-  // Check config
+  // CONFIG - WORKS
   getConfig: () => api.get('/email-config'),
   
-  // Health check
+  // HEALTH - WORKS
   healthCheck: () => api.get('/health/email'),
   
-  // SIMPLE FUNCTION THAT WORKS
-  sendBloodRequest: async (donorData) => {
-    try {
-      console.log('📧 Sending blood request via simple method...');
-      
-      // Option 1: Use the test endpoint with custom message
-      const response = await api.post('/email/send-test', {
-        to: donorData.email,
-        subject: `🩸 Blood Request: ${donorData.bloodGroup} Needed`,
-        message: `Dear ${donorData.name},\n\nWe need ${donorData.bloodGroup} blood urgently.\n\nPlease contact us if available.\n\nLifeLink Blood Bank`
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('Email send error:', error);
-      throw error;
-    }
+  // SIMPLE BLOOD REQUEST
+  sendBloodRequest: (donorEmail, requestData) => {
+    return api.post('/email/send-test', {
+      to: donorEmail,
+      subject: `🩸 Blood Request: ${requestData.bloodGroup}`,
+      message: `Blood Group: ${requestData.bloodGroup}\nUnits: ${requestData.unitsRequired}\nUrgency: ${requestData.urgency || 'High'}`
+    });
   }
 };
 
@@ -199,6 +158,10 @@ export const healthAPI = {
   check: () => api.get('/health'),
 };
 
-// Export the api instance for direct use
+// Test connection on startup
+api.get('/health')
+  .then(res => console.log('✅ Backend connected:', res.data.status))
+  .catch(err => console.error('❌ Backend connection failed:', err.message));
+
 export { api };
 export default api;
