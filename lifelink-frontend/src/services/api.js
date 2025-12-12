@@ -6,26 +6,9 @@ console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
 console.log('=========================');
 
-// Determine the correct API URL
-let API_URL;
-
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-  // Local development
-  API_URL = 'http://localhost:5000/api';
-  console.log('🌍 Detected: Local development environment');
-} else {
-  // Production (Render)
-  API_URL = 'https://lifelink-bloodbank-4gxu.onrender.com/api';
-  console.log('🌍 Detected: Production environment');
-}
-
-// Override with environment variable if set
-if (process.env.REACT_APP_API_URL) {
-  API_URL = process.env.REACT_APP_API_URL;
-  console.log('🔄 Overriding with REACT_APP_API_URL:', API_URL);
-}
-
-console.log('🔗 FINAL API URL:', API_URL);
+// FORCE LOCALHOST FOR NOW
+let API_URL = 'http://localhost:5000/api';
+console.log('🌍 FORCING LOCALHOST:', API_URL);
 
 // Create axios instance
 const api = axios.create({
@@ -94,14 +77,14 @@ const testBackendConnection = async () => {
 // Run connection test
 testBackendConnection();
 
-// Auth API
+// ========== AUTH API ==========
 export const authAPI = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
   getMe: () => api.get('/auth/me'),
 };
 
-// Donors API
+// ========== DONORS API ==========
 export const donorsAPI = {
   getAll: (filters = {}) => api.get('/donors', { params: filters }),
   updateAvailability: (availability) => api.put('/donors/availability', { availability }),
@@ -109,7 +92,7 @@ export const donorsAPI = {
   getStats: () => api.get('/donors/stats'),
 };
 
-// REQUESTS API - Complete with all functions
+// ========== REQUESTS API ==========
 export const requestsAPI = {
   create: (requestData) => api.post('/requests', requestData),
   getAll: (filters = {}) => api.get('/requests', { params: filters }),
@@ -118,7 +101,7 @@ export const requestsAPI = {
   getStats: () => api.get('/requests/stats'),
   search: (filters = {}) => api.get('/requests/search', { params: filters }),
   
-  // Email functions
+  // Email functions - USE EXISTING ENDPOINTS
   sendToDonor: (data) => api.post('/requests/send-to-donor', data),
   sendBulkRequests: (data) => api.post('/requests/send-bulk', data),
   getHospitalDonorRequests: () => api.get('/requests/hospital/donor-requests'),
@@ -129,12 +112,12 @@ export const requestsAPI = {
   getRequests: () => api.get('/requests'),
 };
 
-// INVENTORY API - FIXED: Handles array response correctly
+// ========== INVENTORY API ==========
 export const inventoryAPI = {
   // Gets simple array response
   getAll: () => {
     console.log('🩸 Fetching inventory...');
-    return api.get('/inventory/simple')  // Use simple endpoint that returns array
+    return api.get('/inventory/simple')
       .then(response => {
         console.log('✅ Inventory data received:', response.data);
         return { data: Array.isArray(response.data) ? response.data : [] };
@@ -145,13 +128,8 @@ export const inventoryAPI = {
       });
   },
   
-  // Alternative: Direct array endpoint
   getSimple: () => api.get('/inventory/simple'),
-  
-  // Get with stats (for admin)
   getWithStats: () => api.get('/inventory/stats'),
-  
-  // Admin functions
   update: (data) => api.put('/inventory/update', data),
   adjust: (data) => api.put('/inventory/adjust', data),
   getStats: () => api.get('/inventory/stats'),
@@ -159,7 +137,7 @@ export const inventoryAPI = {
   getCriticalStocks: () => api.get('/inventory/critical'),
 };
 
-// ADMIN API
+// ========== ADMIN API ==========
 export const adminAPI = {
   getDashboard: () => api.get('/admin/dashboard'),
   getUsers: () => api.get('/admin/users'),
@@ -169,28 +147,54 @@ export const adminAPI = {
   getUserCounts: () => api.get('/admin/user-counts'),
 };
 
-// Donations API
+// ========== DONATIONS API ==========
 export const donationsAPI = {
   create: (donationData) => api.post('/donations', donationData),
   getAll: (filters = {}) => api.get('/donations', { params: filters }),
   getStats: () => api.get('/donations/stats'),
 };
 
-// Analytics API
+// ========== ANALYTICS API ==========
 export const analyticsAPI = {
   getDashboard: () => api.get('/analytics/dashboard'),
   exportData: (type) => api.get(`/analytics/export?type=${type}`),
 };
 
-// Email API - Direct email testing
+// ========== EMAIL API - SIMPLIFIED ==========
 export const emailAPI = {
+  // Test email (already works!)
   sendTest: (email) => api.get(`/test-email?email=${email}`),
+  
+  // Custom email (use existing endpoint)
   sendCustom: (data) => api.post('/email/send-test', data),
+  
+  // Check config
   getConfig: () => api.get('/email-config'),
+  
+  // Health check
   healthCheck: () => api.get('/health/email'),
+  
+  // SIMPLE FUNCTION THAT WORKS
+  sendBloodRequest: async (donorData) => {
+    try {
+      console.log('📧 Sending blood request via simple method...');
+      
+      // Option 1: Use the test endpoint with custom message
+      const response = await api.post('/email/send-test', {
+        to: donorData.email,
+        subject: `🩸 Blood Request: ${donorData.bloodGroup} Needed`,
+        message: `Dear ${donorData.name},\n\nWe need ${donorData.bloodGroup} blood urgently.\n\nPlease contact us if available.\n\nLifeLink Blood Bank`
+      });
+      
+      return response;
+    } catch (error) {
+      console.error('Email send error:', error);
+      throw error;
+    }
+  }
 };
 
-// Health check
+// ========== HEALTH API ==========
 export const healthAPI = {
   check: () => api.get('/health'),
 };
